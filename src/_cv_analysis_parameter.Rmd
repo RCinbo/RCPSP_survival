@@ -1,0 +1,50 @@
+```{r {{id}}-setup, echo=FALSE}
+#A species is randomly sampled if this template is run interactively.
+#Else, the id is equal to the {{id}} that is passed through knit_expand
+if (interactive()) {
+  this_par <- sample(unique(colnames(data_cv)[6:39]), 1)
+} else {
+  this_par <- "{{id}}"
+}
+data_cv_all_1 <- data_cv %>%
+  mutate(binned = cut_number(x = data_cv %>% dplyr::pull(this_par), n = 4)) %>%
+  dplyr::select(`ID set`, binned) %>%
+  right_join(data_cv_all_1, by = join_by(`ID set` == ID))
+# selection <- iris %>%
+#   dplyr::filter(Species == this_id)
+```
+
+#### Analysis of the `r stringr::str_to_title(this_par)` parameter
+
+The `r this_par` parameter takes values between `r min(data_cv %>% dplyr::pull(this_par))` and `r max(data_cv %>% dplyr::pull(this_par))`. `r this_par` is defined as "`r parameters %>% dplyr::filter(Parameter == this_par) %>% dplyr::pull(Info)`". It is split up in four equal-sized discrete bins (same number of instances in each bin). We now compare the run times for instances in each of the four bins for both @watermeyer2022partition and @creemers2021.
+
+Figure \@ref(fig:{{id}}-KM) shows the different Kaplan- Meier curves.
+
+```{r {{id}}-KM, fig.cap="Comparing the run time for WZ (left) and C (right). Note that the x-axis does not match", echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.height = 5}
+p1 <- survfit2(Surv(Time, status) ~ binned,
+         data = data_cv_all_1 %>% filter(author == "WZ")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion of instances not solved to optimality"
+    ) + 
+  ylim(0, 1) +
+  #xlim(0, max(data_cv_all_1$Time))
+  scale_color_discrete(name = this_par)
+p2 <- survfit2(Surv(Time, status) ~ binned,
+         data = data_cv_all_1 %>% filter(author == "C")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion of instances not solved to optimality"
+    ) + 
+  ylim(0, 1)
+
+combined <- p1 + p2 & theme(legend.position = "bottom")
+combined + plot_layout(guides = "collect")
+```
+
+```{r }
+#remove binned
+data_cv_all_1 %>% dplyr::select(-binned)
+```
