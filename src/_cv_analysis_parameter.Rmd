@@ -30,7 +30,8 @@ p1 <- survfit2(Surv(Time, status) ~ binned,
     ) + 
   ylim(0, 1) +
   #xlim(0, max(data_cv_all_1$Time))
-  scale_color_discrete(name = this_par)
+  scale_color_manual(name = this_par,
+                     values = colorRampPalette(colors = c("#99CCFF", "#003366"))(4))
 p2 <- survfit2(Surv(Time, status) ~ binned,
          data = data_cv_all_2 %>% filter(author == "C")) %>%
   ggsurvfit() +
@@ -38,7 +39,10 @@ p2 <- survfit2(Surv(Time, status) ~ binned,
     x = "milliseconds",
     y = "Proportion of instances not solved to optimality"
     ) + 
-  ylim(0, 1)
+  ylim(0, 1) +
+  #xlim(0, max(data_cv_all_1$Time))
+  scale_color_manual(name = this_par,
+                     values = colorRampPalette(colors = c("#99CCFF", "#003366"))(4))
 
 combined <- p1 + p2 & theme(legend.position = "bottom")
 combined + plot_layout(guides = "collect")
