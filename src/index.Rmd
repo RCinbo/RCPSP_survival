@@ -4,8 +4,12 @@ output:
   bookdown::html_document2:
     toc: true
     fig_caption: true
+  bookdown::pdf_book:
+    toc: true
+    fig_caption: true
 bibliography: references.bib
 site: bookdown::bookdown_site
+delete_merged_file: true
 ---
 
 ```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
@@ -200,7 +204,7 @@ qKM %>%
 
 ### Runtime with different instance parameters
 
-```{r display-species-analysis, results = "asis", echo = FALSE, eval = FALSE}
+```{r display-parameter-analysis, results = "asis", echo = FALSE, eval = TRUE}
 to_do <- c("CNC", "AD", "TF", "Wprec", "RF", "RU", "RS", "RC")
 rmd <- sapply(
   to_do,
@@ -212,10 +216,3 @@ rmd <- sapply(
 cat(knit(text = rmd, quiet = TRUE))
 ```
 
-```{r display-CNC, results = "asis", echo = FALSE}
-rmd <- knit_expand("_cv_analysis_parameter.Rmd", id = "CNC")
-```
-
-```{r display-AD, results = "asis", echo = FALSE}
-rmd <- knit_expand("_cv_analysis_parameter.Rmd", id = "AD")
-```

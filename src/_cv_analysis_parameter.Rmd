@@ -6,7 +6,7 @@ if (interactive()) {
 } else {
   this_par <- "{{id}}"
 }
-data_cv_all_1 <- data_cv %>%
+data_cv_all_2 <- data_cv %>%
   mutate(binned = cut_number(x = data_cv %>% dplyr::pull(this_par), n = 4)) %>%
   dplyr::select(`ID set`, binned) %>%
   right_join(data_cv_all_1, by = join_by(`ID set` == ID))
@@ -22,7 +22,7 @@ Figure \@ref(fig:{{id}}-KM) shows the different Kaplan- Meier curves.
 
 ```{r {{id}}-KM, fig.cap="Comparing the run time for WZ (left) and C (right). Note that the x-axis does not match", echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.height = 5}
 p1 <- survfit2(Surv(Time, status) ~ binned,
-         data = data_cv_all_1 %>% filter(author == "WZ")) %>%
+         data = data_cv_all_2 %>% filter(author == "WZ")) %>%
   ggsurvfit() +
   labs(
     x = "milliseconds",
@@ -32,7 +32,7 @@ p1 <- survfit2(Surv(Time, status) ~ binned,
   #xlim(0, max(data_cv_all_1$Time))
   scale_color_discrete(name = this_par)
 p2 <- survfit2(Surv(Time, status) ~ binned,
-         data = data_cv_all_1 %>% filter(author == "C")) %>%
+         data = data_cv_all_2 %>% filter(author == "C")) %>%
   ggsurvfit() +
   labs(
     x = "milliseconds",
@@ -44,7 +44,3 @@ combined <- p1 + p2 & theme(legend.position = "bottom")
 combined + plot_layout(guides = "collect")
 ```
 
-```{r }
-#remove binned
-data_cv_all_1 %>% dplyr::select(-binned)
-```
