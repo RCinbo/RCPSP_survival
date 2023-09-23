@@ -7,16 +7,17 @@ if (interactive()) {
   this_par <- "{{id}}"
 }
 data_cv_all_2 <- data_cv %>%
-  mutate(binned = cut_number(x = data_cv %>% dplyr::pull(this_par), n = 4)) %>%
+  mutate(binned = chop_equally(x = data_cv %>% dplyr::pull(this_par), groups = 4)) %>%
   dplyr::select(`ID set`, binned) %>%
   right_join(data_cv_all_1, by = join_by(`ID set` == ID))
+nb_groups <- length(unique(data_cv_all_2$binned)) #should be 4 but chop_equally adjusts if necessary
 # selection <- iris %>%
 #   dplyr::filter(Species == this_id)
 ```
 
 #### Analysis of the `r stringr::str_to_title(this_par)` parameter
 
-The `r this_par` parameter takes values between `r min(data_cv %>% dplyr::pull(this_par))` and `r max(data_cv %>% dplyr::pull(this_par))`. `r this_par` is defined as "`r parameters %>% dplyr::filter(Parameter == this_par) %>% dplyr::pull(Info)`". It is split up in four equal-sized discrete bins (same number of instances in each bin). We now compare the run times for instances in each of the four bins for both @watermeyer2022partition and @creemers2021.
+The `r this_par` parameter takes values between `r min(data_cv %>% dplyr::pull(this_par))` and `r max(data_cv %>% dplyr::pull(this_par))`. `r this_par` is defined as "`r parameters %>% dplyr::filter(Parameter == this_par) %>% dplyr::pull(Info)`". It is split up in `r nb_groups` equal-sized discrete bins (same number of instances in each bin). We now compare the run times for instances in each of the `r nb_groups` bins for both @watermeyer2022partition and @creemers2021.
 
 Figure \@ref(fig:{{id}}-KM) shows the different Kaplan- Meier curves.
 
@@ -31,7 +32,7 @@ p1 <- survfit2(Surv(Time, status) ~ binned,
   ylim(0, 1) +
   #xlim(0, max(data_cv_all_1$Time))
   scale_color_manual(name = this_par,
-                     values = colorRampPalette(colors = c("#99CCFF", "#003366"))(4))
+                     values = colorRampPalette(colors = c("#99CCFF", "#003366"))(nb_groups))
 p2 <- survfit2(Surv(Time, status) ~ binned,
          data = data_cv_all_2 %>% filter(author == "C")) %>%
   ggsurvfit() +

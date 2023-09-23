@@ -14,6 +14,7 @@ delete_merged_file: true
 
 ```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
 library(kableExtra)
+library(corrplot)
 library(readxl)
 library(rprojroot)
 library(tidyverse)
@@ -22,6 +23,7 @@ library(survival)
 library(ggsurvfit)
 library(knitr)
 library(patchwork)
+library(santoku)#chop_equal in stead of cut_number
 ```
 # Introduction
 
@@ -38,7 +40,8 @@ parameters <- read_excel(
 ) %>%
   rename(Category = `Paramater category`) %>%
   dplyr::select(1:3) %>%
-  mutate(Category = na.locf(Category))
+  mutate(Category = na.locf(Category),
+         Parameter = str_replace(Parameter, "#", "nb"))
 
 n_nc <- sum(parameters$Category == "Network Topology")
 n_ci <- sum(parameters$Category == "Complexity indictors")
@@ -66,10 +69,15 @@ parameters %>%
 # Results
 
 ## CV dataset
-The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances, first described in @cv2020 that can be downloaded from [here](https://www.projectmanagement.ugent.be/research/data). As of September 2023, three different authors have submitted their run-time results and best (or optimal) solution to each of the instances;
+The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances, first described in @cv2020 that can be downloaded from [here](https://www.projectmanagement.ugent.be/research/data).
+Figure \@ref(fig:cv-cormat) shows the correlation between different parameters (Table \@ref(tab:parameter)) in all 623 instances.
+Figure \@ref(fig: cv-cormat-reorder) shows the same correlation with the rows and column reordered to show highly correlated hierarchical clusters.
+
+As of September 2023, three different authors have submitted their run-time results and best (or optimal) solution to each of the instances;
 - @cv2020 designed this dataset with difficult to solve instances and provided their solutions to some of them.
 - @watermeyer2022partition was the first one to add further solutions to improve upon the already achieved results.
 - @creemers2021 recently added his results and is able to solve almost all instances.
+
 
 In this chapter, we compare the run times reported by each of the researchers for each of the instances. If a researcher is unable to find the optimal solution (within a certain time limit), they might still report the best solution that was found.
 
@@ -81,7 +89,11 @@ data_cv <- read_excel(
   ),
   sheet = "CV",
   skip = 0
-)
+) %>%
+  rename(nbR = `#R`) %>%
+  rename(nbAct = `#Act`) %>%
+  rename(nblR = `#lR`) %>%
+  rename(nbhR = `#hR`)
 
 data_cv_cv <- read_csv2(
   file = find_root_file(
@@ -119,6 +131,38 @@ data_cv_all <- data_cv_cv %>%
   mutate(Type = as.factor(Type),
          author = factor(as.factor(author),
                          levels = c("CV", "WZ", "C")))
+```
+
+```{r cv-cormat, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest.", fig.width = 9, fig.height = 6}
+M <- data_cv %>%
+  dplyr::select(
+    parameters %>%
+      dplyr::filter(Category %in%
+                      c("Network Topology",
+                        "Complexity indictors",
+                        "Resource parameters")) %>%
+      pull(Parameter) &
+                      where(is.numeric)) %>%
+  cor()
+corrplot(M)
+order.AOE <- corrMatOrder(M, order = 'AOE')
+order.FPC <- corrMatOrder(M, order = 'FPC')
+order.hc <- corrMatOrder(M, order = 'hclust')
+order.hc2 <- corrMatOrder(M, order = 'hclust', hclust.method = 'ward.D')
+
+M.AOE <- M[order.AOE, order.AOE]
+M.FPC <- M[order.FPC, order.FPC]
+M.hc  <- M[order.hc, order.hc]
+M.hc2 <- M[order.hc2, order.hc2]
+corrplot(M)
+#corrplot(M.AOE)
+#corrplot(M.FPC)
+#corrplot(M.hc)
+```
+
+```{r cv-cormat-reorder, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest (hierarchical clustering reordering).", fig.width = 9, fig.height = 6}
+corrplot(M.hc)
+corrRect.hclust(M.hc2, k = 6)
 ```
 
 ### Run times: Kaplan Meier
@@ -205,7 +249,11 @@ qKM %>%
 ### Runtime with different instance parameters
 
 ```{r display-parameter-analysis, results = "asis", echo = FALSE, eval = TRUE}
-to_do <- c("CNC", "AD", "TF", "Wprec", "RF", "RU", "RS", "RC")
+#c("CNC", "AD", "TF", "Wprec", "RF", "RU", "RS", "RC")
+to_do <- data_cv %>%
+  dplyr::select(6:38) %>%
+  dplyr::select(where(is.numeric)) %>%
+  colnames()
 rmd <- sapply(
   to_do,
   function(id) {
