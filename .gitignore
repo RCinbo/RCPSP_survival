@@ -49,3 +49,6 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+#csv files are too big
+*.csv
