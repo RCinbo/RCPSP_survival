@@ -27,7 +27,10 @@ library(santoku)#chop_equal in stead of cut_number
 ```
 # Introduction
 
-For each instance, several parameters describe the network topology, complexity, and resources (Table \@ref(tab:parameter)). 
+To describe network complexity, much has been written on different parameters and indices to approximate how hard an instance is to solve [@ELMAGHRABY1980223; @DEREYCK1996347; @HERROELEN1998279].
+Over the years, the list of possible parameters has grown a lot and each may have its advantages and disadvantages.
+
+For each instance, several parameters describe the network topology, complexity, and resources (Table \@ref(tab:parameter)).  
 
 ```{r parameter, echo = FALSE, message = FALSE, warning = FALSE}
 parameters <- read_excel(
@@ -64,19 +67,21 @@ parameters %>%
   kableExtra::group_rows(group_label = "Resource parameters",
                          start_row = 1 + n_nc + n_ci,
                          end_row = n_nc + n_ci + n_rp) %>%
-  kableExtra::kable_styling()
+  kableExtra::kable_styling() %>%
+  kableExtra::column_spec(1, width = "0.5in") %>%
+  kableExtra::column_spec(2, width = "5.5in")
 ```
 # Results
 
 ## CV dataset
 The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances, first described in @cv2020 that can be downloaded from [here](https://www.projectmanagement.ugent.be/research/data).
 Figure \@ref(fig:cv-cormat) shows the correlation between different parameters (Table \@ref(tab:parameter)) in all 623 instances.
-Figure \@ref(fig: cv-cormat-reorder) shows the same correlation with the rows and column reordered to show highly correlated hierarchical clusters.
+Figure \@ref(fig: cv-cormat-reorder) shows the same correlation matrix with the rows and column reordered to show highly correlated hierarchical clusters.
 
 As of September 2023, three different authors have submitted their run-time results and best (or optimal) solution to each of the instances;
-- @cv2020 designed this dataset with difficult to solve instances and provided their solutions to some of them.
-- @watermeyer2022partition was the first one to add further solutions to improve upon the already achieved results.
-- @creemers2021 recently added his results and is able to solve almost all instances.
+- @cv2020 (CV) designed this dataset with difficult to solve instances and provided their heuristic solutions to some of them.
+- @watermeyer2022partition (WZ) was the first one to add further solutions to improve upon the already achieved results.
+- @creemers2021 (C) recently added his results and is able to solve almost all instances.
 
 
 In this chapter, we compare the run times reported by each of the researchers for each of the instances. If a researcher is unable to find the optimal solution (within a certain time limit), they might still report the best solution that was found.
@@ -243,7 +248,9 @@ qKM <- data_frame(author = c("CV", "WZ", "C"),
 qKM %>%
   kable(caption = "Quantiles and confidence intervals for the time to solve to optimality.",
         booktabs = TRUE) %>%
-  kableExtra::kable_styling()
+  kableExtra::kable_styling() %>%
+  kableExtra::column_spec(1, width = "0.4in") %>%
+  kableExtra::column_spec(2:6, width = "1in")
 ```
 
 ### Runtime with different instance parameters
@@ -263,4 +270,5 @@ rmd <- sapply(
   paste(collapse = "\n\n")
 cat(knit(text = rmd, quiet = TRUE))
 ```
+
 
