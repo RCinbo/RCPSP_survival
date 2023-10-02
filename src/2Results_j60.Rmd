@@ -1,0 +1,65 @@
+## PSBLIB datasets
+
+The PSBLIB datasets are commonly referred to as "J##" where ## denote the number of activities in the network.
+Popular problem instances are J30, J60, J90 and J120.
+These datasets are much older than the CV dataset and some instances have still not been solved [@kolisch1997psplib].
+
+```{r load-cv-data, echo = FALSE, message = FALSE, warning = FALSE}
+#All parameters for each of the instances
+data_PSBLIB <- read_excel(
+  path = find_root_file(
+    "data", "RCPLIB (Parameters and BKS).xlsx",
+    criterion = has_file("RCPSP_survival.Rproj")
+  ),
+  sheet = "PSPLIB",
+  skip = 0
+) %>%
+  rename(nbR = `#R`) %>%
+  rename(nbAct = `#Act`) %>%
+  rename(nblR = `#lR`) %>%
+  rename(nbhR = `#hR`)
+
+files <- list.files(find_root_file(
+     "data", criterion = has_file("RCPSP_survival.Rproj")
+))
+
+data_j30 <- get_dataset(files = files, subset = "J30") # read all csv filed that start with "J30"
+
+
+data_cv_cv <- read_csv2(
+  file = find_root_file(
+    "data", "CV_CV.csv",
+    criterion = has_file("RCPSP_survival.Rproj")
+  ),
+  skip = 6
+) %>%
+  as.data.frame() %>%
+  dplyr::select(1:4) %>%
+  mutate(author = "CV")
+
+data_cv_wz <- read_csv2(
+  file = find_root_file(
+    "data", "CV_WZ.csv",
+    criterion = has_file("RCPSP_survival.Rproj")
+  ),
+  skip = 6
+) %>%
+  dplyr::select(1:4) %>%
+  mutate(author = "WZ")
+
+data_cv_c <- read_csv2(
+  file = find_root_file(
+    "data", "CV_C.csv",
+    criterion = has_file("RCPSP_survival.Rproj")
+  ),
+  skip = 6
+) %>%
+  dplyr::select(1:4) %>%
+  mutate(author = "C")
+data_cv_all <- data_cv_cv %>%
+  rbind(data_cv_wz) %>%
+  rbind(data_cv_c) %>%
+  mutate(Type = as.factor(Type),
+         author = factor(as.factor(author),
+                         levels = c("CV", "WZ", "C")))
+```
