@@ -1,12 +1,12 @@
-## PSBLIB datasets
+## PSPLIB datasets
 
-The PSBLIB datasets are commonly referred to as "J##" where ## denote the number of activities in the network.
+The PSPLIB datasets are commonly referred to as "J##" where ## denote the number of activities in the network.
 Popular problem instances are J30, J60, J90 and J120.
 These datasets are much older than the CV dataset and some instances have still not been solved [@kolisch1997psplib].
 
-```{r load-cv-data, echo = FALSE, message = FALSE, warning = FALSE}
+```{r load-psplib-parameters, echo = FALSE, message = FALSE, warning = FALSE}
 #All parameters for each of the instances
-data_PSBLIB <- read_excel(
+data_PSPLIB <- read_excel(
   path = find_root_file(
     "data", "RCPLIB (Parameters and BKS).xlsx",
     criterion = has_file("RCPSP_survival.Rproj")
@@ -18,48 +18,98 @@ data_PSBLIB <- read_excel(
   rename(nbAct = `#Act`) %>%
   rename(nblR = `#lR`) %>%
   rename(nbhR = `#hR`)
-
+```
+```{r make-psplib-data, echo = FALSE, message = FALSE, warning = FALSE, eval = !file.exists(find_root_file("data", "psplib_survival_data.yml", criterion = has_file("RCPSP_survival.Rproj")))}
 files <- list.files(find_root_file(
      "data", criterion = has_file("RCPSP_survival.Rproj")
 ))
 
 data_j30 <- get_dataset(files = files, subset = "J30") # read all csv filed that start with "J30"
+data_j60 <- get_dataset(files = files, subset = "J60") # read all csv filed that start with "J60"
+data_j90 <- get_dataset(files = files, subset = "J90") # read all csv filed that start with "J60"
+data_j120 <- get_dataset(files = files, subset = "J120") # read all csv filed that start with "J120"
 
-
-data_cv_cv <- read_csv2(
-  file = find_root_file(
-    "data", "CV_CV.csv",
-    criterion = has_file("RCPSP_survival.Rproj")
-  ),
-  skip = 6
-) %>%
-  as.data.frame() %>%
-  dplyr::select(1:4) %>%
-  mutate(author = "CV")
-
-data_cv_wz <- read_csv2(
-  file = find_root_file(
-    "data", "CV_WZ.csv",
-    criterion = has_file("RCPSP_survival.Rproj")
-  ),
-  skip = 6
-) %>%
-  dplyr::select(1:4) %>%
-  mutate(author = "WZ")
-
-data_cv_c <- read_csv2(
-  file = find_root_file(
-    "data", "CV_C.csv",
-    criterion = has_file("RCPSP_survival.Rproj")
-  ),
-  skip = 6
-) %>%
-  dplyr::select(1:4) %>%
-  mutate(author = "C")
-data_cv_all <- data_cv_cv %>%
-  rbind(data_cv_wz) %>%
-  rbind(data_cv_c) %>%
+data_results_psplib <- data_j30 %>%
+  rbind(data_j60) %>%
+  rbind(data_j90) %>%
+  rbind(data_j120) %>%
   mutate(Type = as.factor(Type),
-         author = factor(as.factor(author),
-                         levels = c("CV", "WZ", "C")))
+         author = as.factor(author))
+
+data_psplib_all <- data_results_psplib %>%
+  group_by(author, set) %>%
+  summarize(nb_optimal = sum(Type == "optimal"),
+            max_runtime = max(Time, na.rm = TRUE)) %>%
+  dplyr::filter(nb_optimal != 0) %>% #remove authors that only report heuristics/lower bounds
+  full_join(data_PSPLIB %>%
+               dplyr::select(`ID set`, SubSet) %>%
+               rename(ID = `ID set`),
+             by = join_by(set == SubSet),
+             relationship = "many-to-many") %>% #add all possible instances for each item set and author combination
+  mutate(ID = as.character(ID)) %>%
+  left_join(data_results_psplib %>%
+              dplyr::filter(Type == "optimal") %>%
+              dplyr::select(author, ID, set, Time)) %>%
+  mutate(status = 1*(!is.na(Time)),
+         Time = ifelse(is.na(Time),
+                       max_runtime,
+                       Time)) %>%
+  arrange(set, author, ID)
+git2rdata::write_vc(data_psplib_all,
+                    file = "psplib_survival_data",
+                    root = find_root_file("data",
+                                          criterion =
+                                            has_file("RCPSP_survival.Rproj")))               
+```
+```{r load-psplib-data, echo = FALSE, message = FALSE, warning = FALSE, eval = file.exists(find_root_file("data", "psplib_survival_data.yml", criterion = has_file("RCPSP_survival.Rproj")))}
+data_psplib_all <- git2rdata::read_vc(file = "psplib_survival_data.yml",
+                   root = find_root_file("data",
+                                         criterion =
+                                           has_file("RCPSP_survival.Rproj")))
+```
+```{r psplib-km, echo = FALSE, message = FALSE, warning = FALSE, fig_width = 6.5, fig.height = 6}
+p30 <- survfit2(Surv(Time, status) ~ author,
+                data = data_psplib_all %>%
+                  dplyr::filter(set == "J30")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion of instances not solved to optimality"
+    ) +
+  ggtitle("J30") + 
+  ylim(0,1)
+p60 <- survfit2(Surv(Time, status) ~ author,
+                data = data_psplib_all %>%
+                  dplyr::filter(set == "J60")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion of instances not solved to optimality"
+    ) +
+  ggtitle("J60") + 
+  ylim(0,1) + 
+  xlim(0,20*60*60*1000)#20 hours
+p90 <- survfit2(Surv(Time, status) ~ author,
+                data = data_psplib_all %>%
+                  dplyr::filter(set == "J90")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion of instances not solved to optimality"
+    ) +
+  ggtitle("J90") + 
+  ylim(0,1)
+p120 <- survfit2(Surv(Time, status) ~ author,
+                data = data_psplib_all %>%
+                  dplyr::filter(set == "J120")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion of instances not solved to optimality"
+    ) +
+  ggtitle("J120") + 
+  ylim(0,1)
+
+p30 + p60 + p90 + p120
+ggsave("psplib_KM.pdf", width = 13, height = 10)
 ```
