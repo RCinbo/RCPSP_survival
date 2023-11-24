@@ -1,5 +1,5 @@
 ---
-title: "RCPSP-survival: Explorative analysis"
+title: "What makes a Resource-Constrained Project Scheduling Problem (RCPSP) instance difficult?"
 output:
   bookdown::html_document2:
     toc: true
@@ -28,6 +28,35 @@ source(find_root_file("src", "functions.R",
                       criterion = has_file("RCPSP_survival.Rproj")))
 ```
 # Introduction
+
+## Resource Constrained Project Scheduling Problem (RCPSP)
+
+The Resource Constrained Project Scheduling Problem (RCPSP) which is a well-known and extensively studied operations research (OR) problem.
+In general, an RCPSP is a project (eg. building a house), characterized by several activities (eg. digging, building the floor, building the walls, adding electricity, adding windows,...) which all require a certain number of limited resources to be executed (eg. there are only 5 manual laborers available at the same time).
+There are precedence constraints between the activities meaning that some activities cannot start before others are finished (eg; there has to be wall before we can add the windows).
+The goal is to schedule the activities to minimize the total time to complete the project while respecting all precedence constraints and the resource constraints.
+It is an NP-hard problem which means that it cannot be solved to optimality in polynomial time.
+Therefor, many algorithms (mostly branch-and-bound algorithms) have been developed over the years to be able to solve hard problems in shorter time.
+
+The figure below shows a toy example of an RCPSP.
+The top left shows the precedence constraints between activities.
+The top right table shows the duration and resource use for each of the activities.
+The bottom figure shows the optimal solution where each activity is scheduled, respecting all precedence constraints .
+
+![A toy RCPSP example](rcpsp_example.png)
+
+The aim of this paper is to investigate what makes an RCPSP hard to solve for the currently existing algorithms. The next two sections explain (1) the dataset that we will work with and (2) how one can descripe the complexity of an RCPSP instance.
+
+## Data source and description
+
+Over the years, several instance sets have been developed for researchers to test new algorithms.
+In many papers, researchers will report how many instances of the set they can solve and how long it takes to solve them to show the quality of their new algorithm.
+
+Recently, a [new website](http://solutionsupdate.ugent.be/rcpsp) was developed to make run times for different algorithms on different instance sets openly available.
+Any researcher can contribute their results and these results are openly available to download and compare.
+
+
+## RCPSP instance complexity
 
 To describe network complexity, much has been written on different parameters and indices to approximate how hard an instance is to solve [@ELMAGHRABY1980223; @DEREYCK1996347; @HERROELEN1998279].
 Over the years, the list of possible parameters has grown a lot and each may have its advantages and disadvantages.
