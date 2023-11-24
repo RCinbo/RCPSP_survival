@@ -52,3 +52,14 @@ rsconnect/
 
 #csv files are too big
 *.csv
+
+#produced pdf files
+*.pdf
+
+#folder with literature/journal articles
+literature/*
+
+#bookdown folders
+src/_book/*
+src/_bookdown_files/*
+src/_main.Rmd
