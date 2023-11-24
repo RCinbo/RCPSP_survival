@@ -53,8 +53,9 @@ rsconnect/
 #csv files are too big
 *.csv
 
-#produced pdf files
+#produced pdf files of xlsx data files
 *.pdf
+*.xlsx
 
 #folder with literature/journal articles
 literature/*
