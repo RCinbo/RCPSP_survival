@@ -8,8 +8,8 @@ if (interactive()) {
 }
 data_cv_all_2 <- data_cv %>%
   mutate(binned = chop_equally(x = data_cv %>% dplyr::pull(this_par), groups = 4)) %>%
-  dplyr::select(`ID set`, binned) %>%
-  right_join(data_cv_all_1, by = join_by(`ID set` == ID))
+  dplyr::select(IDset, binned) %>%
+  right_join(data_cv_all_1, by = join_by(IDset == ID))
 nb_groups <- length(unique(data_cv_all_2$binned)) #should be 4 but chop_equally adjusts if necessary
 # selection <- iris %>%
 #   dplyr::filter(Species == this_id)
