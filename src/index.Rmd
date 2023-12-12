@@ -1,5 +1,5 @@
 ---
-title: "What makes a Resource-Constrained Project Scheduling Problem (RCPSP) instance difficult?"
+title: "Determining what makes an RCPSP hard to solve: A survival model analysis"
 output:
   bookdown::html_document2:
     toc: true
@@ -31,41 +31,50 @@ source(find_root_file("src", "functions.R",
 
 ## Resource Constrained Project Scheduling Problem (RCPSP)
 
-The Resource Constrained Project Scheduling Problem (RCPSP) which is a well-known and extensively studied operations research (OR) problem.
-In general, an RCPSP is a project (eg. building a house), characterized by several activities (eg. digging, building the floor, building the walls, adding electricity, adding windows,...) which all require a certain number of limited resources to be executed (eg. there are only 5 manual labourers available at the same time).
+The Resource Constrained Project Scheduling Problem (RCPSP) is a well-known and extensively studied operations research (OR) problem.
+In general, an RCPSP is a project (eg. building a house), characterized by several activities (eg. digging, building the floor, building the walls, adding electricity, installing windows,...) which all require a certain number of limited resources to be executed (eg. there are only 5 manual labourers available at the same time).
 There are precedence constraints between the activities meaning that some activities cannot start before others are finished (eg; there has to be wall before we can add the windows).
-The goal is to schedule the activities to minimize the total time to complete the project while respecting all precedence constraints and the resource constraints.
+The goal is to schedule the activities to minimize the total time to complete the project while respecting all precedence constraints and resource constraints.
 It is an NP-hard problem which means that it cannot be solved to optimality in polynomial time.
 Therefore, many algorithms (mostly branch-and-bound algorithms) have been developed over the years to be able to solve harder problems in shorter time.
 
-The figure below shows a toy example of an RCPSP.
+Figure \@ref(fig:toy-rcpsp) shows a toy example of an RCPSP.
 The top left shows the precedence constraints between activities.
+It can be seen that activity three cannot start before activity 2 finishes.
 The top right table shows the duration and resource use for each of the activities.
-The bottom figure shows the optimal solution where each activity is scheduled, respecting all precedence constraints .
+It can be seen that activity three needs two resources and that there are only two resources available in total.
+This essentially means that no other activity can be performed in parallel with activity three.
+The bottom figure shows the optimal solution where each activity is scheduled, respecting all precedence and resource constraints.
+```{r toy-rcpsp, fig.cap = "A toy RCPSP example", out.width = "400px", echo = FALSE, include = TRUE}
+knitr::include_graphics(
+  path = find_root_file("rcpsp_example.png",
+                        criterion = has_file("report.Rproj")),
+  )
+```
 
-![A toy RCPSP example](rcpsp_example.png)
 
-The aim of this paper is to investigate what makes an RCPSP hard to solve for the currently existing algorithms. The next two sections explain (1) the dataset that we will work with and (2) how one can describe the complexity of an RCPSP instance.
+The aim of this paper is to develop a methodology to investigate what makes an RCPSP hard to solve for the currently existing algorithms.
+The next two sections explain (1) the dataset that we will work with and (2) how one can describe the complexity of an RCPSP instance.
 
 ## Data source and description
 
-Over the years, several instance sets have been developed for researchers to test new algorithms.
-In many papers, researchers will report how many instances of the set they can solve and how long it takes to solve them to show the quality of their new algorithm.
+Over the years, several RCPSP instance sets have been developed for researchers to test new algorithms.
+In many papers on RCPSP algorithms, researchers illustrate the quality of a new algorithm by reporting how many instances of the set they can solve and how long it takes to solve them.
 
 Recently, a [new website](http://solutionsupdate.ugent.be/rcpsp) was developed to make run times for different algorithms on different instance sets openly available.
-Any researcher can contribute their results and these results are openly available to download and compare.
+Any researcher can upload their results and these results are openly available to download and compare.
 
-In this article, we first explore the available datasets for the following datasets:
+In this article, we first explore the available datasets for the following instance sets which can be downloaded from [here](https://www.projectmanagement.ugent.be/research/data):
 
-* PSPLIB dataset: although these datasets have been available for a long time, some instances have still not been solved [@kolisch1997psplib]. They are very well known and commonly referred to as "J##" where ## denote the number of activities in the network. Popular problem instances are J30, J60, J90 and J120.
-* The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances, first described in @cv2020 that can be downloaded from [here](https://www.projectmanagement.ugent.be/research/data).
+* PSPLIB dataset: although these datasets have been available for a long time, some instances still have not been solved [@kolisch1997psplib]. They are very well known and commonly referred to as "J##" where ## denote the number of activities in the network. Popular problem instance sets are J30, J60, J90 and J120.
+* The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances. These instances are meant to be hard to solve for exact algorithms according to  @cv2020.
 
 ## RCPSP instance complexity
 
 To describe instance complexity, many different parameters and indices are developed to approximate how hard an instance is to solve [@ELMAGHRABY1980223; @DEREYCK1996347; @HERROELEN1998279].
-Over the years, the list of possible parameters has grown a lot and each may have its advantages and disadvantages.
+Over the years, the list of parameters that should measure instance complexity has grown a lot and each index / parameter may have its advantages and disadvantages.
 
-For each instance on the [website](http://solutionsupdate.ugent.be/rcpsp), several parameters describe the network topology, complexity, and resources (Table \@ref(tab:parameter)).  
+For each instance on the [website](http://solutionsupdate.ugent.be/rcpsp), several parameters describe the network topology, complexity, and resources. Table \@ref(tab:parameter) shows a list of all parameters that are considered in this report. All parameters are briefly described and it can be noticed that some seem vert similar.
 
 ```{r parameter, echo = FALSE, message = FALSE, warning = FALSE}
 parameters <- read_excel(
@@ -116,23 +125,29 @@ parameters %>%
   kableExtra::column_spec(2, width = "5.5in")
 ```
 
-# Results
+# Methodology
 
-## Data exploration
+The main goal of this research is to explore which RCPSP instance parameters can best predict whether or not the instance can be solved and, if it can be solved, how long it will take to find the optimal solution. Table \@ref(tab:parameter) clearly shows that there is a myriad of possible complexity indicators and it is not known which ones can best predict instance complexity.
+In contrast, new parameters and indices are still being developed without properly proving their merit (ability to predict the time to find an optimal solution) in addition to the already existing indices.
+
+Most researchers will set a maximum calculation time to find the optimal solution for each problem instance.
+If the optimal solution is not found within this time limit, the instance is right-censored.
+We further hypothesize that some problem instances will be too hard to solve, no matter how much time is allowed to find an optimal solution.
+Due to the complexity of some problems, for instance, solving it might require more memory than what is available on the machine that implements the algorithm.
+In this case, the computer will crash and will never find the optimal solution.
+
+Therefor, we will use cure models to model the time to find the optimal solution. The independent variables will be the complexity parameters of Table \@ref(tab:parameter).
+In cure models, a fraction of the population will never experience the event of interest.
+Translated to our problem setting, this means that some problem instances will never be solved to optimality.
+In essence, this means that the true time to solve until optimality for these instances is $\infty$.
+In this case, *cure models* should be used to properly estimate the effect of the different complexity parameters on the time to solve until optimality.
+
+There are two main families of cure regression models: (1) mixture cure models and (2) promotion cure models.
+Both types of cure models model a *cure fraction* $1 - p$; the probability that an instance cannot be solved, and a *survival function* $S(t)$ for those instances that can be solved to optimality.
+Mixture cure models allow more flexibility as the cure fraction and survival function may depend on different covariates. The main downside is that it is harder to fit these type of models.
+Promotion cure models are easier to interpret as they maintain a proportional hazard structure. The downside is that both the cure fraction and survival function will depend on the same covariates.
 
 
-## CV dataset
-The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances, first described in @cv2020 that can be downloaded from [here](https://www.projectmanagement.ugent.be/research/data).
-Figure \@ref(fig:cv-cormat) shows the correlation between different parameters (Table \@ref(tab:parameter)) in all 623 instances.
-Figure \@ref(fig: cv-cormat-reorder) shows the same correlation matrix with the rows and column reordered to show highly correlated hierarchical clusters.
-
-As of September 2023, three different authors have submitted their run-time results and best (or optimal) solution to each of the instances;
-- @cv2020 (CV) designed this dataset with difficult to solve instances and provided their heuristic solutions to some of them.
-- @watermeyer2022partition (WZ) was the first one to add further solutions to improve upon the already achieved results.
-- @creemers2021 (C) recently added his results and is able to solve almost all instances.
-
-
-In this chapter, we compare the run times reported by each of the researchers for each of the instances. If a researcher is unable to find the optimal solution (within a certain time limit), they might still report the best solution that was found.
 
 ```{r load-cv-data, echo = FALSE, message = FALSE, warning = FALSE}
 data_cv <- read_excel(
@@ -147,6 +162,7 @@ data_cv <- read_excel(
   rename(nbAct = `#Act`) %>%
   rename(nblR = `#lR`) %>%
   rename(nbhR = `#hR`)
+colnames(data_cv)[2] <- "IDset"
 colnames(data_cv) <- str_replace_all(colnames(data_cv), " ", "-")
 colnames(data_cv) <- str_replace_all(colnames(data_cv), fixed("("), "-")
 colnames(data_cv) <- str_replace_all(colnames(data_cv), fixed(")"), "")
@@ -187,9 +203,6 @@ data_cv_all <- data_cv_cv %>%
   mutate(Type = as.factor(Type),
          author = factor(as.factor(author),
                          levels = c("CV", "WZ", "C")))
-```
-
-```{r cv-cormat, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest.", fig.width = 9, fig.height = 6}
 M <- data_cv %>%
   dplyr::select(
     parameters %>%
@@ -201,6 +214,18 @@ M <- data_cv %>%
       pull(Parameter) &
                       where(is.numeric)) %>%
   cor()
+```
+
+Exploring the correlation between the long list of complexity indices, it is clear that many indices are highly correlated. The correlation matrices for the CV instances (Figure \@ref(fig:cv-cormat) and \@ref(fig:cv-cormat-reorder)) show that some parameters measure almost the same thing.
+The correlation between RC and hRC, for example is `r round(M["RC", "hRC"],2)` while the correlation between RC and FS22 is `r round(M["RC", "FS22"],2)`!
+To avoid multicollinearity problems, it is clear that some parameters should therefor not be added together in a statistical model.
+We will apply regularization techniques to be able to work with the multicollinearity.
+
+
+##---------------EXPLANATION OF REGULARIZATION TECHNIQUES HERE----------------##
+
+```{r cv-cormat, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest.", fig.width = 9, fig.height = 6}
+
 #corrplot(M)
 order.AOE <- corrMatOrder(M, order = 'AOE')
 order.FPC <- corrMatOrder(M, order = 'FPC')
@@ -222,9 +247,30 @@ corrplot(M.hc)
 corrRect.hclust(M.hc2, k = 6)
 ```
 
-The correlation matrices for the CV instances (Figure \@ref(fig:cv-cormat) and \@ref(fig:cv-cormat-reorder)) show that some correlations are problematically high since the parameters measure almost the same thing.
-The correlation between RC and hRC, for example is `r round(M["RC", "hRC"],2)` while the correlation between RC and FS22 is `r round(M["RC", "FS22"],2)`!
-To avoid multicollinearity problems, it is clear that some parameters should therefor not be added together in a statistical model.
+
+# Results
+
+In this section, we describe our results. In section \@ref(subsec-exploration) we explore the data and select a subset of the data for further exploration.
+
+## Data exploration {#subsec-exploration}
+
+## Cure model
+
+# Conclusion and future research
+
+## CV dataset
+The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances, first described in @cv2020 that can be downloaded from [here](https://www.projectmanagement.ugent.be/research/data).
+Figure \@ref(fig:cv-cormat) shows the correlation between different parameters (Table \@ref(tab:parameter)) in all 623 instances.
+Figure \@ref(fig: cv-cormat-reorder) shows the same correlation matrix with the rows and column reordered to show highly correlated hierarchical clusters.
+
+As of September 2023, three different authors have submitted their run-time results and best (or optimal) solution to each of the instances;
+- @cv2020 (CV) designed this dataset with difficult to solve instances and provided their heuristic solutions to some of them.
+- @watermeyer2022partition (WZ) was the first one to add further solutions to improve upon the already achieved results.
+- @creemers2021 (C) recently added his results and is able to solve almost all instances.
+
+
+In this chapter, we compare the run times reported by each of the researchers for each of the instances. If a researcher is unable to find the optimal solution (within a certain time limit), they might still report the best solution that was found.
+
 
 ### Run times: Kaplan Meier
 
@@ -311,7 +357,7 @@ qKM %>%
 
 ### Runtime with different instance parameters
 
-In this chapter, we explore the different parameters and how they influence the survival time. Since all parameters are continuous variables, we split the instance set into three or four equally-sized groups where the parameter varies from low to high. The Kaplan Meier curves will allow us to look for patterns. Pparameters that allow us to distinguish easy from hard instances will be of interest for subsequent statistical models.
+In this chapter, we explore the different parameters and how they influence the survival time. Since all parameters are continuous variables, we split the instance set into three or four equally-sized groups where the parameter varies from low to high. The Kaplan Meier curves will allow us to look for patterns. Parameters that allow us to distinguish easy from hard instances will be of interest for subsequent statistical models.
 
 
 ```{r display-parameter-analysis, results = "asis", echo = FALSE, eval = TRUE}
@@ -379,16 +425,16 @@ par(xpd = TRUE)
 plot(out.tree, compress = TRUE)
 text(out.tree, use.n = TRUE)
 ```
-```{r cv-tree-all-km, fig.cap="Kaplan-Meier curves for the different groups for the survival tree for the whole dataset.", echo = FALSE, message = FALSE, warning = FALSE}
-KMPlot(out.tree, scale.time=1000, type=1)
+```{r cv-tree-all-km, fig.cap="Kaplan-Meier curves for the different groups for the survival tree for the whole dataset.", echo = FALSE, message = FALSE, warning = FALSE, eval = FALSE}
+KMPlot(out.tree, scale.time = 1000, type = 1)
 ```
 
-```{r cv-tree-C, fig.cap="A survival tree for the Creemers algorithm.", echo = FALSE, message = FALSE, warning = FALSE}
+```{r cv-tree-C, fig.cap="A survival tree for the Creemers algorithm.", echo = FALSE, message = FALSE, warning = FALSE, eval = FALSE}
 par(xpd = TRUE)
 plot(out.tree.c, compress = TRUE)
 text(out.tree.c, use.n = TRUE)
 ```
-```{r cv-tree-C-km, fig.cap="Kaplan-Meier curves for the different groups for the survival tree for the Creemers algorithm.", echo = FALSE, message = FALSE, warning = FALSE}
+```{r cv-tree-C-km, fig.cap="Kaplan-Meier curves for the different groups for the survival tree for the Creemers algorithm.", echo = FALSE, message = FALSE, warning = FALSE, eval = FALSE}
 KMPlot(out.tree.c, scale.time = 1000, type = 1)
 ```
 
