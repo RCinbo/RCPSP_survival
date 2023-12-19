@@ -24,6 +24,7 @@ library(ggsurvfit)
 library(knitr)
 library(patchwork)
 library(santoku)#chop_equal in stead of cut_number
+library(intsurv)
 source(find_root_file("src", "functions.R",
                       criterion = has_file("RCPSP_survival.Rproj")))
 ```
@@ -132,22 +133,46 @@ In contrast, new parameters and indices are still being developed without proper
 
 Most researchers will set a maximum calculation time to find the optimal solution for each problem instance.
 If the optimal solution is not found within this time limit, the instance is right-censored.
-We further hypothesize that some problem instances will be too hard to solve, no matter how much time is allowed to find an optimal solution.
+We further hypothesize that some problem instances will be too hard to solve to optimality, no matter how much time is allowed to find an optimal solution.
 Due to the complexity of some problems, for instance, solving it might require more memory than what is available on the machine that implements the algorithm.
-In this case, the computer will crash and will never find the optimal solution.
+In this case, the computer will never find the optimal solution.
 
-Therefor, we will use cure models to model the time to find the optimal solution. The independent variables will be the complexity parameters of Table \@ref(tab:parameter).
+Therefore, we will use cure models to model the time to find the optimal solution.
+The independent variables in our model will be the complexity parameters of Table \@ref(tab:parameter).
 In cure models, a fraction of the population will never experience the event of interest.
 Translated to our problem setting, this means that some problem instances will never be solved to optimality.
-In essence, this means that the true time to solve until optimality for these instances is $\infty$.
+In the remainder of this text, we will call instances that can (not) be solved to optimality, no matter how much calculation time is allowed *solvable* (*unsolvable*) instances.
+In essence, this means that the true time to solve unsolvable instance is $\infty$.
 In this case, *cure models* should be used to properly estimate the effect of the different complexity parameters on the time to solve until optimality.
 
-There are two main families of cure regression models: (1) mixture cure models and (2) promotion cure models.
-Both types of cure models model a *cure fraction* $1 - p$; the probability that an instance cannot be solved, and a *survival function* $S(t)$ for those instances that can be solved to optimality.
-Mixture cure models allow more flexibility as the cure fraction and survival function may depend on different covariates. The main downside is that it is harder to fit these type of models.
-Promotion cure models are easier to interpret as they maintain a proportional hazard structure. The downside is that both the cure fraction and survival function will depend on the same covariates.
+There are two main families of cure regression models: (1) mixture cure models and (2) promotion time cure models.
+The mixture cure model consists of two components. *Incidence* indicates whether the subject is susceptible (i.e. whether the problem instance is solvable). 
+The *latency* represents the time until a solvable instance is solved to optimality.
+While incidence is usually modelled using logistic regression, both parametric and semiparametric survival models exist for the latency part.
+The promotion time cure model models the survival time as an improper survival function with a PH structure that will reach a plateau in stead of zero at infinity.
+Mixture cure models allow more flexibility as the cure fraction and survival function may depend on different covariates.
+The main downside is that it is harder to fit these types of models.
+Promotion time cure models are easier to interpret as they maintain a proportional hazard structure.
+The downside is that both the cure fraction and survival function will need to depend on the same covariates.
 
+We will use a mixture cure model:
+$$S(t|x, z) = p(z)S_u(t|x) + 1- p(z)$$
+where $X$ and $Z$ are two vectors of covariates for the latency and incidence part respectively.
+The incidence part models the probability of an instance being solvable. 
+$$p(z) = P(B=1|Z=z)$$
+where $B$ is a binary variable, indication whether the instance is solvable (1) or not (0); $B = I(T<\infty)$. 
+The latency part models the conditional survival for the solvable (uncured) instances.
+$$S_u(t|x) = P(T>t|X=x, B=1)$$
 
+mixture cure models: 
+* https://github.com/jrdnmdhl/flexsurvcure allows different parametric models for incidence and latency, and the parameters in the model do or do not depend on x
+* smcure: Incidence : logistic model but also other GLM with
+various link functions
+ Latency : semiparametric Cox PH and AFT model
+ Estimation : EM algorithm, variances obtained by
+bootstrap
+
+https://cran.r-project.org/web/packages/intsurv/intsurv.pdf -> cure models met variable selection (bron/referentie: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9660265/)
 
 ```{r load-cv-data, echo = FALSE, message = FALSE, warning = FALSE}
 data_cv <- read_excel(
@@ -216,45 +241,108 @@ M <- data_cv %>%
   cor()
 ```
 
-Exploring the correlation between the long list of complexity indices, it is clear that many indices are highly correlated. The correlation matrices for the CV instances (Figure \@ref(fig:cv-cormat) and \@ref(fig:cv-cormat-reorder)) show that some parameters measure almost the same thing.
-The correlation between RC and hRC, for example is `r round(M["RC", "hRC"],2)` while the correlation between RC and FS22 is `r round(M["RC", "FS22"],2)`!
-To avoid multicollinearity problems, it is clear that some parameters should therefor not be added together in a statistical model.
-We will apply regularization techniques to be able to work with the multicollinearity.
+Exploring the correlation between the long list of complexity indices, it is clear that many indices are highly correlated. The correlation matrices for the CV instances (Figure \@ref(fig:cv-cormat) and \@ref(fig:cv-cormat-reorder) in appendix \@ref(app-1)) show that some parameters measure almost the same thing.
+To avoid multicollinearity problems, it is clear that some parameters should therefore not be added together in a statistical model.
+We will apply regularization techniques to be able to work with the multicollinearity and perform variable selection.
+Regularization techniques such as least absolute shrinkage and deletion operator (LASSO), adaptive LASSO (ALASSO), elastic net, and smoothly clipped absolute deviation (SCAD) minimize an objective function (eg likelihood function) that contains a penalty function to reflect sparsity.
+These techniques have been less studied in cure models; a detailed overview can be found in @amicoCureModelsSurvival2018 and a more recent overview can be found in @suAnalysisSurvivalData2022.
+
+We will use the *cox_cure_net* function in the [*intsurv*](https://cran.r-project.org/web/packages/intsurv/intsurv.pdf) package in R which allows to fit a regularized Cox cure rate model [@intsurv].
+For solvable instances ($B_j=1$), we thus assume that the time to optimally solve instance $j$ follows:
+$$S_u(t|B_j=1, x_j) = S_{u,0}(t)^{exp(\beta^\intercal x_j)}$$
+where $\beta$ are the parameters that need to be estimated and with the baseline survival function $S_{u,0}(t|B_j=1, x_j) = P(T>t|B=1, X=0)$ left unspecified.
+
+A logistic regression setup is used to model $p_j$:
+$$p_j(z) = \frac{exp(z_j^\intercal \gamma + \gamma_0)}{1+exp(z_j^\intercal \gamma + \gamma_0)}$$
+Where $\gamma_0$ and $y$ are the intercept and all other parameters that need to be estimated.
+
+While the PH assumption remains valid for solvable instances, it will no longer be valid at the level of the population (including unsolvable instances).
+Therefore, in stead of the partial likelihood approach, the expectation-maximization (EM) is used to fit the model.
+
+The likelihood function, which will be optimized using the expectation-maximization (EM) algorithm can be written down in the following way:
+
+$$L_c(\gamma, \beta, S_{u,0}) = \prod_{i=1}^n\{[p(Z_i)h_u(Y_i|X_i)S_u(Y_i|X_i)]^{\Delta_i B_i} * [p(Z_i)S_u(Y_i|X_i)]^{(1-\Delta_i)B_i} * [1-p(Z_i)]^{(1-\Delta_i)(1-B_i)}\} $$
+
+where $\Delta$ is a binary variable, indicating whether the observation is right-censored ($\Delta =0$) or not ($\Delta = 1$).
+
+As suggested in @masud2018variable, we can then use adaptive LASSO and imposed $L_1$ norm penalty on the log likelihood.
+The *intsurv * implements Elastic Net which has two tuning parameters for both the incidence and latency part:
+
+* $\alpha_i$: penalty for the incidence part of the loglikelihood function. If this is 1 (0), the elastic net reduced to LASSO (ridge) regression.
+* $\alpha_l$: penalty for the latency part of the loglikelihood function. If this is 1 (0), the elastic net reduced to LASSO (ridge) regression.
+* $\lambda_i$: A constant that multiplies the penalty terms for the incidence part of the loglikelihood function.
+* $\lambda_l$: A constant that multiplies the penalty terms for the latency part of the loglikelihood function.
 
 
-##---------------EXPLANATION OF REGULARIZATION TECHNIQUES HERE----------------##
+*from the package documentation: I found "lambda * (penalty_factor * alpha * lasso + (1 - alpha) / 2 * ridge)"
+The penalized log likelihood can be written in the following way:
 
-```{r cv-cormat, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest.", fig.width = 9, fig.height = 6}
 
-#corrplot(M)
-order.AOE <- corrMatOrder(M, order = 'AOE')
-order.FPC <- corrMatOrder(M, order = 'FPC')
-order.hc <- corrMatOrder(M, order = 'hclust')
-order.hc2 <- corrMatOrder(M, order = 'hclust', hclust.method = 'ward.D')
-
-M.AOE <- M[order.AOE, order.AOE]
-M.FPC <- M[order.FPC, order.FPC]
-M.hc  <- M[order.hc, order.hc]
-M.hc2 <- M[order.hc2, order.hc2]
-corrplot(M)
-#corrplot(M.AOE)
-#corrplot(M.FPC)
-#corrplot(M.hc)
-```
-
-```{r cv-cormat-reorder, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest (hierarchical clustering reordering).", fig.width = 9, fig.height = 6}
-corrplot(M.hc)
-corrRect.hclust(M.hc2, k = 6)
-```
-
+$$ pl_c(\gamma, \beta, , S_{u,0}) = log(L_c(\gamma, \beta, S_{u,0})) + \\ \lambda_c\alpha_c\sum_{j=1}^k|\gamma_j| + \frac{\lambda_c}{2}(1-\alpha_c)\sum_{j=1}^k\gamma_j^2 + \\ \lambda_u\alpha_u\sum_{j=1}^k|\beta_j| + \frac{\lambda_u}{2}(1-\alpha_u)\sum_{j=1}^k\beta_j^2$$
 
 # Results
 
 In this section, we describe our results. In section \@ref(subsec-exploration) we explore the data and select a subset of the data for further exploration.
 
+------------mention something about Concordance Index (see intsurv)?------------
+
+
 ## Data exploration {#subsec-exploration}
 
+We downloaded all files on the PSPLIB and CV instance sets. We only consider exact algorithms since we want to analyse the time it takes to obtain the optimal solution. Heuristic algorithms typically can not ascertain whether the obtained solution is optimal and are therefore excluded. There are 
+
+look at the amount of data that we have for each instance set / algorithm --> only creemers algorithm will work.
+
 ## Cure model
+
+Mention that Time=0.00000001 if it is actually 0
+```{r fit-models}
+data_cv_all_1 <- data_cv_all %>%
+  group_by(ID, author) %>%
+  summarize(is_optimal = any(Type == "optimal"),
+            Time = mean(Time)) %>%
+  ungroup() %>%
+  mutate(Time = ifelse(is_optimal,
+                       Time,
+                       ifelse(author == "C",
+                              48*60*60*1000,
+                              ifelse(author == "WZ",
+                                     3600000,
+                                     20*60*60*1000))
+                       ),
+         status = 1*is_optimal) %>%
+  filter(author == "C") %>%
+  left_join(data_cv, by = join_by(ID == IDset)) %>%
+  mutate(Time = ifelse(Time <= 0.00001, 0.00001, Time)) %>%
+  mutate(Time == 172800000, 126755558, Time) #lower the upper limit of the Time
+data_cheat <- data_cv_all_1 %>%
+  mutate(status = ifelse(Time > 5 * 10^5, 0, status),
+         Time = ifelse(Time > 5 * 10^5, 5*10^5, Time))
+covariates <- data_cv %>%
+  dplyr::select(c(6:38, 58:61)) %>%
+  dplyr::select(where(is.numeric)) %>%
+  colnames()
+covariates <- covariates[!str_detect(covariates, "-") &
+                           !(covariates %in% c("RS", "RF", "nbR", "nbhR", "hRU", "hRC", "RC", "LA"))]
+fm <- paste(covariates, collapse = " + ")
+surv_fm <- as.formula(sprintf("~ %s", fm))
+cure_fm <- surv_fm
+fit <- cox_cure_net(surv_fm, cure_fm, data = data_cv_all_1,
+                     time = Time, event = status,
+                     surv_alpha = 0.5, cure_alpha = 0.5)
+#This is the only model that yields SOMETHING for the surv, if surv_alpha>0, all coefficients are always zero:
+fit <- cox_cure_net(~nbAct + CNC, cure_fm, data = data_cv_all_1,
+                     time = (log(Time)+0.01), event = status,
+                     surv_alpha = 0, cure_alpha = 0.8)
+#blacklist: Wall, Wprec-> do seem relevant in the exploratory graphs
+
+#This works though: 
+  fit <- cox_cure_net(~nbAct + CNC + OS+SP+AD+I5+TF+Wprec+(FS31 >0.22) + LE, cure_fm, data = data_cheat,
+                     time = (log(Time)+0.01), event = status,
+                     surv_alpha = 0.1, cure_alpha = 0.8)
+```
+
+The prediction accuracy of the model is assessed using the concordance index that accommodates right-censored cure models [@asano2017assessing].
 
 # Conclusion and future research
 
@@ -355,9 +443,50 @@ qKM %>%
   kableExtra::column_spec(2:6, width = "1in")
 ```
 
-### Runtime with different instance parameters
+# Bibliography
 
-In this chapter, we explore the different parameters and how they influence the survival time. Since all parameters are continuous variables, we split the instance set into three or four equally-sized groups where the parameter varies from low to high. The Kaplan Meier curves will allow us to look for patterns. Parameters that allow us to distinguish easy from hard instances will be of interest for subsequent statistical models.
+<div id="refs"></div>
+
+# (APPENDIX) Appendix {-} 
+
+# Correlation between covariates {#app-1}
+
+The following two figures show the correlation between the complexity parameters in the CV dataset. Figure \@ref(fig:cv-cormat-reorder) clearly shows that there are groups of covariates that are highly correlated. The correlation between RC and hRC, for example is `r round(M["RC", "hRC"],2)` while the correlation between RC and FS22 is `r round(M["RC", "FS22"],2)`.
+
+```{r cv-cormat, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest.", fig.width = 9, fig.height = 6}
+
+#corrplot(M)
+order.AOE <- corrMatOrder(M, order = 'AOE')
+order.FPC <- corrMatOrder(M, order = 'FPC')
+order.hc <- corrMatOrder(M, order = 'hclust')
+order.hc2 <- corrMatOrder(M, order = 'hclust', hclust.method = 'ward.D')
+
+M.AOE <- M[order.AOE, order.AOE]
+M.FPC <- M[order.FPC, order.FPC]
+M.hc  <- M[order.hc, order.hc]
+M.hc2 <- M[order.hc2, order.hc2]
+corrplot(M)
+#corrplot(M.AOE)
+#corrplot(M.FPC)
+#corrplot(M.hc)
+```
+
+```{r cv-cormat-reorder, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest (hierarchical clustering reordering).", fig.width = 9, fig.height = 6}
+corrplot(M.hc)
+corrRect.hclust(M.hc2, k = 6)
+```
+
+# Checking the proportional hazard assumption
+
+Since we are using a Cox model, it is important to know whether the Cox proportional hazard assumption holds.
+In this chapter, we explore the different parameters and how they influence the survival time.
+Since all parameters are continuous variables, we split the instance set into three or four equally-sized groups where the parameter varies from low to high.
+The Kaplan Meier curves will allow us to look for patterns that might uncover important covariates to predict runtimes.
+Additionally, the figures allow us to visually check the PH assumption.
+
+!!!??? also formally test PH assumption ???!!!
+http://www.sthda.com/english/wiki/cox-model-assumptions#:~:text=The%20proportional%20hazards%20(PH)%20assumption,violation%20of%20the%20PH%20assumption.
+
 
 
 ```{r display-parameter-analysis, results = "asis", echo = FALSE, eval = TRUE}
@@ -375,77 +504,3 @@ rmd <- sapply(
   paste(collapse = "\n\n")
 cat(knit(text = rmd, quiet = TRUE))
 ```
-
-### Survival tree
-
-```{r message=FALSE, warning=FALSE, include=FALSE}
-library(LongCART)
-data_cv_tree <- data_cv_all_1 %>%
-  left_join(data_cv %>%
-              dplyr::select(c(2, 6:38, 58:61)) %>%
-              dplyr::select(where(is.numeric)),
-            by = join_by(ID == IDset)) %>%
-  add_rownames() %>%
-  dplyr::filter(author != "CV") %>%
-  mutate(Time = ifelse(Time == 0, 0.000001, Time))
-out.tree <- SurvCART(data = data_cv_tree, patid = "rowname", 
-              censorvar = "status", timevar = "Time", 
-              gvars = dput(colnames(data_cv_tree)[-c(1:6)]),  
-              tgvars = c(rep(1, 34)), 
-              time.dist = "exponential", 
-              event.ind = 1, alpha = 0.05, minsplit = 80, minbucket = 40, 
-              print = TRUE)
-data_cv_tree_c <- data_cv_tree %>% dplyr::filter(author == "C")
-data_cv_tree_wz <- data_cv_tree %>% dplyr::filter(author == "WZ")
-out.tree.c <- SurvCART(data = data_cv_tree_c, patid = "rowname", 
-              censorvar = "status", timevar = "Time", 
-              gvars = dput(colnames(data_cv_tree)[-c(1:6)]),  
-              tgvars = c(rep(1, 34)), 
-              time.dist = "exponential", 
-              event.ind = 1, alpha = 0.05, minsplit = 80, minbucket = 40, 
-              print = TRUE)
-#these two do not work
-# out.tree.wz <- SurvCART(data = data_cv_tree_wz, patid = "rowname", 
-#               censorvar = "status", timevar = "Time", 
-#               gvars = dput(colnames(data_cv_tree)[-c(1:6)]),  
-#               tgvars = c(rep(1, 34)), 
-#               time.dist = "exponential", 
-#               event.ind = 1, alpha = 0.05, minsplit = 80, minbucket = 40, 
-#               print = TRUE)
-# out.tree.with.author <- SurvCART(data = data_cv_tree, patid = "rowname", 
-#               censorvar = "status", timevar = "Time", 
-#               gvars = dput(colnames(data_cv_tree)[-c(1:6, 41)]),  
-#               tgvars = c(rep(1, 34)), 
-#               time.dist = "exponential", 
-#               event.ind = 1, alpha = 0.05, minsplit = 80, minbucket = 40, 
-#               print = TRUE)
-```
-```{r cv-tree-all, fig.cap="A survival tree for the whole dataset.", echo = FALSE, message = FALSE, warning = FALSE}
-par(xpd = TRUE)
-plot(out.tree, compress = TRUE)
-text(out.tree, use.n = TRUE)
-```
-```{r cv-tree-all-km, fig.cap="Kaplan-Meier curves for the different groups for the survival tree for the whole dataset.", echo = FALSE, message = FALSE, warning = FALSE, eval = FALSE}
-KMPlot(out.tree, scale.time = 1000, type = 1)
-```
-
-```{r cv-tree-C, fig.cap="A survival tree for the Creemers algorithm.", echo = FALSE, message = FALSE, warning = FALSE, eval = FALSE}
-par(xpd = TRUE)
-plot(out.tree.c, compress = TRUE)
-text(out.tree.c, use.n = TRUE)
-```
-```{r cv-tree-C-km, fig.cap="Kaplan-Meier curves for the different groups for the survival tree for the Creemers algorithm.", echo = FALSE, message = FALSE, warning = FALSE, eval = FALSE}
-KMPlot(out.tree.c, scale.time = 1000, type = 1)
-```
-
-### AFT with XGBoost
-https://mlr3book.mlr-org.com/chapters/chapter13/beyond_regression_and_classification.html#sec-survival
-https://arxiv.org/pdf/2008.08080v2.pdf
-https://www.rpubs.com/avinashbarnwal123/aft
-```{r echo = FALSE, message = FALSE, warning = FALSE, include = FALSE}
-library(xgboost)
-
-```
-
-
-# Bibliography{-}

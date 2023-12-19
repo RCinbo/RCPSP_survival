@@ -6,6 +6,7 @@ if (interactive()) {
 } else {
   this_par <- "{{id}}"
 }
+
 data_cv_all_2 <- data_cv %>%
   mutate(binned = chop_equally(x = data_cv %>% dplyr::pull(this_par), groups = 4)) %>%
   dplyr::select(IDset, binned) %>%
