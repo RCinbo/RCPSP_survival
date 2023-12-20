@@ -8,9 +8,24 @@ if (interactive()) {
 }
 
 data_cv_all_2 <- data_cv %>%
-  mutate(binned = chop_equally(x = data_cv %>% dplyr::pull(this_par), groups = 4)) %>%
-  dplyr::select(IDset, binned) %>%
-  right_join(data_cv_all_1, by = join_by(IDset == ID))
+  mutate(binned = chop_equally(x = data_cv %>% dplyr::pull(this_par),
+                               groups = 4),
+         continuous = data_cv %>% dplyr::pull(this_par)) %>%
+  dplyr::select(IDset, binned, continuous) %>%
+  right_join(data_cv_all_1 %>% filter(author == "C"),
+             by = join_by(IDset == ID))
+
+data_psplib_all_2 <- data_psplib[data_psplib[,this_par] != "n.f.", ] %>%
+  mutate(
+    binned = chop_equally(
+      x = data_psplib[data_psplib[,this_par] != "n.f.", ] %>%
+        dplyr::pull(this_par), groups = 4),
+    continuous = data_psplib[data_psplib[,this_par] != "n.f.", ] %>%
+      dplyr::pull(this_par)) %>%
+  dplyr::select(IDset, binned, continuous) %>%
+  right_join(data_psplib_all_1 %>% filter(author == "C"),
+             by = join_by(IDset == ID)) %>%
+  filter(!is.na(binned)) 
 nb_groups <- length(unique(data_cv_all_2$binned)) #should be 4 but chop_equally adjusts if necessary
 # selection <- iris %>%
 #   dplyr::filter(Species == this_id)
@@ -18,28 +33,27 @@ nb_groups <- length(unique(data_cv_all_2$binned)) #should be 4 but chop_equally 
 
 #### Analysis of the `r stringr::str_to_title(this_par)` parameter
 
-The `r this_par` parameter takes values between `r min(data_cv %>% dplyr::pull(this_par))` and `r max(data_cv %>% dplyr::pull(this_par))`. `r this_par` is defined as "`r parameters %>% dplyr::filter(Parameter == this_par) %>% dplyr::pull(Info)`". It is split up in `r nb_groups` equal-sized discrete bins (same number of instances in each bin). We now compare the run times for instances in each of the `r nb_groups` bins for both @watermeyer2022partition and @creemers2021.
+The `r this_par` parameter takes values between `r min(data_cv %>% dplyr::pull(this_par))` and `r max(data_cv %>% dplyr::pull(this_par))`. `r this_par` is defined as "`r parameters %>% dplyr::filter(Parameter == this_par) %>% dplyr::pull(Info)`". It is split up in `r nb_groups` equal-sized discrete bins (same number of instances in each bin). We now compare the run times of @creemers2021 for instances in each of the `r nb_groups` bins for both the PSPLIB and CV dataset.
+Figure \@ref(fig:{{id}}-KM) shows the different Kaplan-Meier curves.
 
-Figure \@ref(fig:{{id}}-KM) shows the different Kaplan- Meier curves.
-
-```{r {{id}}-KM, fig.cap="Comparing the run time for WZ (left) and C (right). Note that the x-axis does not match", echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.height = 5}
+```{r {{id}}-KM, fig.cap="Comparing the run time for Creemers (2021) for the J60 (left) and CV (right) instance sets.", echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.height = 4}
 p1 <- survfit2(Surv(Time, status) ~ binned,
-         data = data_cv_all_2 %>% filter(author == "WZ")) %>%
+         data = data_psplib_all_2 %>% filter(author == "C")) %>%
   ggsurvfit() +
   labs(
     x = "milliseconds",
-    y = "Proportion of instances not solved to optimality"
+    y = "Proportion not solved optimally"
     ) + 
   ylim(0, 1) +
   #xlim(0, max(data_cv_all_1$Time))
   scale_color_manual(name = this_par,
-                     values = colorRampPalette(colors = c("#99CCFF", "#003366"))(nb_groups))
+                     values = colorRampPalette(colors = c("#99CCFF", "#003366"))(4))
 p2 <- survfit2(Surv(Time, status) ~ binned,
          data = data_cv_all_2 %>% filter(author == "C")) %>%
   ggsurvfit() +
   labs(
     x = "milliseconds",
-    y = "Proportion of instances not solved to optimality"
+    y = "Proportion not solved optimally"
     ) + 
   ylim(0, 1) +
   #xlim(0, max(data_cv_all_1$Time))
@@ -48,5 +62,31 @@ p2 <- survfit2(Surv(Time, status) ~ binned,
 
 combined <- p1 + p2 & theme(legend.position = "bottom")
 combined + plot_layout(guides = "collect")
+
+data_both <- rbind(data_cv_all_2 %>% filter(author == "C"),
+                   data_psplib_all_2 %>% filter(author == "C"))
+
+library("survival")
+if(this_par != "LE") {
+res.cox.bin <- coxph(Surv(Time, status) ~ binned,
+                 data =  data_both)
+test.ph.bin <- cox.zph(res.cox.bin)
+res.cox.cntn <- coxph(Surv(Time, status) ~ continuous,
+                 data = data_both)
+test.ph.cntn <- cox.zph(res.cox.cntn)
+}
 ```
 
+```{r conditional_print, child='_text_PH.Rmd', eval = (this_par != "LE"), result = 'asis'}
+```
+
+```{r conditional_print, child='_text_no_PH.Rmd', eval = (this_par == "LE"), result = 'asis'}
+```
+
+```{r {{id}}-PHassumption, fig.cap="Schoenfeld residuals for the binned and continuous version of the complexity parameter.", echo = FALSE, message = FALSE, warning = FALSE, fig.width = 9, fig.height = 4, eval = (this_par != "LE")}
+par(mfrow = c(1,2))
+plot(test.ph.bin)
+plot(test.ph.cntn)
+```
+
+\clearpage

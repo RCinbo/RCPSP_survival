@@ -7,12 +7,15 @@ output:
   bookdown::pdf_book:
     toc: true
     fig_caption: true
+    includes:
+      in_header: preamble.tex
 bibliography: references.bib
 site: bookdown::bookdown_site
 delete_merged_file: true
 ---
 
-```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
+```{r setup, echo = FALSE, message = FALSE, warning = FALSE, appendix = TRUE}
+#-------------------------------------load all packages------------------------#
 library(kableExtra)
 library(corrplot)
 library(readxl)
@@ -23,7 +26,7 @@ library(survival)
 library(ggsurvfit)
 library(knitr)
 library(patchwork)
-library(santoku)#chop_equal in stead of cut_number
+library(santoku)#chop_equal instead of cut_number
 library(intsurv)
 source(find_root_file("src", "functions.R",
                       criterion = has_file("RCPSP_survival.Rproj")))
@@ -32,19 +35,19 @@ source(find_root_file("src", "functions.R",
 
 ## Resource Constrained Project Scheduling Problem (RCPSP)
 
-The Resource Constrained Project Scheduling Problem (RCPSP) is a well-known and extensively studied operations research (OR) problem.
+The Resource Constrained Project Scheduling Problem (RCPSP) is a well-known and extensively studied Operations Research (OR) problem.
 In general, an RCPSP is a project (eg. building a house), characterized by several activities (eg. digging, building the floor, building the walls, adding electricity, installing windows,...) which all require a certain number of limited resources to be executed (eg. there are only 5 manual labourers available at the same time).
-There are precedence constraints between the activities meaning that some activities cannot start before others are finished (eg; there has to be wall before we can add the windows).
+There are precedence constraints between the activities meaning that some activities cannot start before others are finished (eg. there has to be wall before we can add the windows).
 The goal is to schedule the activities to minimize the total time to complete the project while respecting all precedence constraints and resource constraints.
 It is an NP-hard problem which means that it cannot be solved to optimality in polynomial time.
 Therefore, many algorithms (mostly branch-and-bound algorithms) have been developed over the years to be able to solve harder problems in shorter time.
 
 Figure \@ref(fig:toy-rcpsp) shows a toy example of an RCPSP.
 The top left shows the precedence constraints between activities.
-It can be seen that activity three cannot start before activity 2 finishes.
+It can be seen that activity 3 cannot start before activity 2 finishes.
 The top right table shows the duration and resource use for each of the activities.
-It can be seen that activity three needs two resources and that there are only two resources available in total.
-This essentially means that no other activity can be performed in parallel with activity three.
+It can be seen that activity 3 needs two resources and that there are only two resources available in total.
+This essentially means that no other activity can be executed in parallel with activity 3.
 The bottom figure shows the optimal solution where each activity is scheduled, respecting all precedence and resource constraints.
 ```{r toy-rcpsp, fig.cap = "A toy RCPSP example", out.width = "400px", echo = FALSE, include = TRUE}
 knitr::include_graphics(
@@ -62,22 +65,26 @@ The next two sections explain (1) the dataset that we will work with and (2) how
 Over the years, several RCPSP instance sets have been developed for researchers to test new algorithms.
 In many papers on RCPSP algorithms, researchers illustrate the quality of a new algorithm by reporting how many instances of the set they can solve and how long it takes to solve them.
 
-Recently, a [new website](http://solutionsupdate.ugent.be/rcpsp) was developed to make run times for different algorithms on different instance sets openly available.
+Recently, a [$\text{\underline{new website}}$](http://solutionsupdate.ugent.be/rcpsp) was developed to make run times for different algorithms on different instance sets openly available.
 Any researcher can upload their results and these results are openly available to download and compare.
 
-In this article, we first explore the available datasets for the following instance sets which can be downloaded from [here](https://www.projectmanagement.ugent.be/research/data):
+In this article, we first explore the available datasets for the following instance sets which can be downloaded from [$\text{\underline{here}}$](https://www.projectmanagement.ugent.be/research/data):
 
-* PSPLIB dataset: although these datasets have been available for a long time, some instances still have not been solved [@kolisch1997psplib]. They are very well known and commonly referred to as "J##" where ## denote the number of activities in the network. Popular problem instance sets are J30, J60, J90 and J120.
-* The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances. These instances are meant to be hard to solve for exact algorithms according to  @cv2020.
+* PSPLIB dataset: although these datasets have been available for a long time, some instances still have not been solved [@kolisch1997psplib]. They are very well known and commonly referred to as "J##" where ## denote the number of activities in the network. Popular problem instance sets are J30, J60, J90, and J120.
+* The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances. These instances are developed to be hard to solve for exact algorithms according to @cv2020.
 
 ## RCPSP instance complexity
 
-To describe instance complexity, many different parameters and indices are developed to approximate how hard an instance is to solve [@ELMAGHRABY1980223; @DEREYCK1996347; @HERROELEN1998279].
+To describe instance complexity, many different parameters and indices have been developed to approximate how hard an instance is to solve [@ELMAGHRABY1980223; @DEREYCK1996347; @HERROELEN1998279].
 Over the years, the list of parameters that should measure instance complexity has grown a lot and each index / parameter may have its advantages and disadvantages.
+In fact, new complexity parameters are still being developed (see, for instance @coelho2023new).
+Often, proving the contribution of a newly developed complexity parameter is limited to illustrating that there is a link between the value of the new parameter and whether or not the instance can be solved.
+Already existing parameters are rarely benchmarked against each other.
 
-For each instance on the [website](http://solutionsupdate.ugent.be/rcpsp), several parameters describe the network topology, complexity, and resources. Table \@ref(tab:parameter) shows a list of all parameters that are considered in this report. All parameters are briefly described and it can be noticed that some seem vert similar.
+For each instance on the [$\text{\underline{website}}$](http://solutionsupdate.ugent.be/rcpsp), several parameters describe the network topology, complexity, and resources. Table \@ref(tab:parameter) shows a list of all parameters that are considered in this report. All parameters are listed with their describtion that is listed on the website and it can be noticed that some seem very similar.
 
-```{r parameter, echo = FALSE, message = FALSE, warning = FALSE}
+```{r parameter, echo = FALSE, message = FALSE, warning = FALSE, appendix = TRUE}
+#-------------------------show all parameters in a table-----------------------#
 parameters <- read_excel(
   path = find_root_file(
     "data", "RCPLIB (Parameters and BKS).xlsx",
@@ -126,7 +133,8 @@ parameters %>%
   kableExtra::column_spec(2, width = "5.5in")
 ```
 
-# Methodology
+
+# Methodology {#methodology}
 
 The main goal of this research is to explore which RCPSP instance parameters can best predict whether or not the instance can be solved and, if it can be solved, how long it will take to find the optimal solution. Table \@ref(tab:parameter) clearly shows that there is a myriad of possible complexity indicators and it is not known which ones can best predict instance complexity.
 In contrast, new parameters and indices are still being developed without properly proving their merit (ability to predict the time to find an optimal solution) in addition to the already existing indices.
@@ -134,47 +142,48 @@ In contrast, new parameters and indices are still being developed without proper
 Most researchers will set a maximum calculation time to find the optimal solution for each problem instance.
 If the optimal solution is not found within this time limit, the instance is right-censored.
 We further hypothesize that some problem instances will be too hard to solve to optimality, no matter how much time is allowed to find an optimal solution.
-Due to the complexity of some problems, for instance, solving it might require more memory than what is available on the machine that implements the algorithm.
+Due to the complexity of some problems, for instance, solving it might require more memory than what is available on the machine that executes the algorithm.
 In this case, the computer will never find the optimal solution.
 
 Therefore, we will use cure models to model the time to find the optimal solution.
 The independent variables in our model will be the complexity parameters of Table \@ref(tab:parameter).
 In cure models, a fraction of the population will never experience the event of interest.
 Translated to our problem setting, this means that some problem instances will never be solved to optimality.
-In the remainder of this text, we will call instances that can (not) be solved to optimality, no matter how much calculation time is allowed *solvable* (*unsolvable*) instances.
+In the remainder of this text, we will call instances that can be solved to optimality, given enough calculation time, *solvable* instances. Instances that can not be solved, no matter how much calculation time is allowed, will be called *unsolvable* instances.
 In essence, this means that the true time to solve unsolvable instance is $\infty$.
 In this case, *cure models* should be used to properly estimate the effect of the different complexity parameters on the time to solve until optimality.
 
 There are two main families of cure regression models: (1) mixture cure models and (2) promotion time cure models.
 The mixture cure model consists of two components. *Incidence* indicates whether the subject is susceptible (i.e. whether the problem instance is solvable). 
 The *latency* represents the time until a solvable instance is solved to optimality.
-While incidence is usually modelled using logistic regression, both parametric and semiparametric survival models exist for the latency part.
-The promotion time cure model models the survival time as an improper survival function with a PH structure that will reach a plateau in stead of zero at infinity.
+While incidence is usually modelled using logistic regression, both parametric and semi-parametric survival models exist for the latency part.
+The promotion time cure model models the survival time as an improper survival function with a Proportional Hazard (PH) structure that will reach a plateau instead of zero at infinity.
 Mixture cure models allow more flexibility as the cure fraction and survival function may depend on different covariates.
 The main downside is that it is harder to fit these types of models.
 Promotion time cure models are easier to interpret as they maintain a proportional hazard structure.
 The downside is that both the cure fraction and survival function will need to depend on the same covariates.
 
-We will use a mixture cure model:
+We will use a mixture cure model since it is deemed likely that different covariates are at play in the incidence and latency part:
 $$S(t|x, z) = p(z)S_u(t|x) + 1- p(z)$$
-where $X$ and $Z$ are two vectors of covariates for the latency and incidence part respectively.
+where $X = (...x...)$ and $Z= (...z...)$ are two vectors of covariates for the latency and incidence part respectively.
 The incidence part models the probability of an instance being solvable. 
 $$p(z) = P(B=1|Z=z)$$
-where $B$ is a binary variable, indication whether the instance is solvable (1) or not (0); $B = I(T<\infty)$. 
+where $B$ is a binary variable, indicating whether the instance is solvable (1) or not (0); $B = I(T<\infty)$. 
 The latency part models the conditional survival for the solvable (uncured) instances.
 $$S_u(t|x) = P(T>t|X=x, B=1)$$
 
-mixture cure models: 
-* https://github.com/jrdnmdhl/flexsurvcure allows different parametric models for incidence and latency, and the parameters in the model do or do not depend on x
-* smcure: Incidence : logistic model but also other GLM with
-various link functions
- Latency : semiparametric Cox PH and AFT model
- Estimation : EM algorithm, variances obtained by
-bootstrap
+<!-- mixture cure models:  -->
+<!-- * https://github.com/jrdnmdhl/flexsurvcure allows different parametric models for incidence and latency, and the parameters in the model do or do not depend on x -->
+<!-- * smcure: Incidence : logistic model but also other GLM with -->
+<!-- various link functions -->
+<!--  Latency : semiparametric Cox PH and AFT model -->
+<!--  Estimation : EM algorithm, variances obtained by -->
+<!-- bootstrap -->
 
-https://cran.r-project.org/web/packages/intsurv/intsurv.pdf -> cure models met variable selection (bron/referentie: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9660265/)
+<!-- https://cran.r-project.org/web/packages/intsurv/intsurv.pdf -> cure models met variable selection (bron/referentie: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9660265/) -->
 
-```{r load-cv-data, echo = FALSE, message = FALSE, warning = FALSE}
+```{r load-cv-data, echo = FALSE, message = FALSE, warning = FALSE, appendix = TRUE}
+#----------------------read and mearge all CV datasets-------------------------#
 data_cv <- read_excel(
   path = find_root_file(
     "data", "RCPLIB (Parameters and BKS).xlsx",
@@ -241,134 +250,70 @@ M <- data_cv %>%
   cor()
 ```
 
-Exploring the correlation between the long list of complexity indices, it is clear that many indices are highly correlated. The correlation matrices for the CV instances (Figure \@ref(fig:cv-cormat) and \@ref(fig:cv-cormat-reorder) in appendix \@ref(app-1)) show that some parameters measure almost the same thing.
+Exploring the correlation between the long list of complexity indices, it is clear that many indices are highly correlated. The correlation matrices for the CV instances (Figure \@ref(fig:cv-cormat-reorder)) and PSPLIB instances (Figure \@ref(fig:psplib-cormat-reorder)) in appendix \@ref(app-1)) show that some parameters measure almost the same thing.
 To avoid multicollinearity problems, it is clear that some parameters should therefore not be added together in a statistical model.
 We will apply regularization techniques to be able to work with the multicollinearity and perform variable selection.
-Regularization techniques such as least absolute shrinkage and deletion operator (LASSO), adaptive LASSO (ALASSO), elastic net, and smoothly clipped absolute deviation (SCAD) minimize an objective function (eg likelihood function) that contains a penalty function to reflect sparsity.
+Regularization techniques such as Least Absolute Shrinkage and Selection Operator (LASSO), Adaptive LASSO (ALASSO), elastic net, and Smoothly Clipped Absolute Deviation (SCAD) minimize an objective function (eg likelihood function) that contains a penalty function to reflect sparsity.
 These techniques have been less studied in cure models; a detailed overview can be found in @amicoCureModelsSurvival2018 and a more recent overview can be found in @suAnalysisSurvivalData2022.
 
-We will use the *cox_cure_net* function in the [*intsurv*](https://cran.r-project.org/web/packages/intsurv/intsurv.pdf) package in R which allows to fit a regularized Cox cure rate model [@intsurv].
+We will use the *cox_cure_net* function in the [$\text{\underline{intsurv}}$](https://cran.r-project.org/web/packages/intsurv/intsurv.pdf)  package in R which allows to fit a regularized Cox cure rate model [@intsurv].
 For solvable instances ($B_j=1$), we thus assume that the time to optimally solve instance $j$ follows:
 $$S_u(t|B_j=1, x_j) = S_{u,0}(t)^{exp(\beta^\intercal x_j)}$$
 where $\beta$ are the parameters that need to be estimated and with the baseline survival function $S_{u,0}(t|B_j=1, x_j) = P(T>t|B=1, X=0)$ left unspecified.
 
 A logistic regression setup is used to model $p_j$:
-$$p_j(z) = \frac{exp(z_j^\intercal \gamma + \gamma_0)}{1+exp(z_j^\intercal \gamma + \gamma_0)}$$
-Where $\gamma_0$ and $y$ are the intercept and all other parameters that need to be estimated.
+$$p(z_j) = \frac{exp(z_j^\intercal \gamma + \gamma_0)}{1+exp(z_j^\intercal \gamma + \gamma_0)}$$
+Where $\gamma_0$ and $\gamma$ are the intercept and all other parameters that need to be estimated for the incidence part of the model.
 
-While the PH assumption remains valid for solvable instances, it will no longer be valid at the level of the population (including unsolvable instances).
-Therefore, in stead of the partial likelihood approach, the expectation-maximization (EM) is used to fit the model.
+While the PH structure remains valid for solvable instances, it will no longer be valid at the level of the population (including unsolvable instances).
+Therefore, instead of the partial likelihood approach, the expectation-maximization (EM) is used to fit the model.
 
-The likelihood function, which will be optimized using the expectation-maximization (EM) algorithm can be written down in the following way:
+The likelihood function, which will be optimized using the EM algorithm can be written down in the following way:
 
 $$L_c(\gamma, \beta, S_{u,0}) = \prod_{i=1}^n\{[p(Z_i)h_u(Y_i|X_i)S_u(Y_i|X_i)]^{\Delta_i B_i} * [p(Z_i)S_u(Y_i|X_i)]^{(1-\Delta_i)B_i} * [1-p(Z_i)]^{(1-\Delta_i)(1-B_i)}\} $$
 
 where $\Delta$ is a binary variable, indicating whether the observation is right-censored ($\Delta =0$) or not ($\Delta = 1$).
 
-As suggested in @masud2018variable, we can then use adaptive LASSO and imposed $L_1$ norm penalty on the log likelihood.
-The *intsurv * implements Elastic Net which has two tuning parameters for both the incidence and latency part:
+As suggested in @masud2018variable, we can then use adaptive LASSO and imposes $L_1$ norm penalty on the log likelihood.
+The *intsurv* package implements Elastic Net which has two tuning parameters for both the incidence and latency part:
 
-* $\alpha_i$: penalty for the incidence part of the loglikelihood function. If this is 1 (0), the elastic net reduced to LASSO (ridge) regression.
-* $\alpha_l$: penalty for the latency part of the loglikelihood function. If this is 1 (0), the elastic net reduced to LASSO (ridge) regression.
-* $\lambda_i$: A constant that multiplies the penalty terms for the incidence part of the loglikelihood function.
-* $\lambda_l$: A constant that multiplies the penalty terms for the latency part of the loglikelihood function.
+* $\alpha_c$: penalty for the incidence part of the loglikelihood function. If this is 1 (0), the elastic net reduced to LASSO (ridge) regression.
+* $\alpha_u$: penalty for the latency part of the loglikelihood function. If this is 1 (0), the elastic net reduced to LASSO (ridge) regression.
+* $\lambda_c$: A constant that multiplies the penalty terms for the incidence part of the loglikelihood function.
+* $\lambda_u$: A constant that multiplies the penalty terms for the latency part of the loglikelihood function.
 
 
-*from the package documentation: I found "lambda * (penalty_factor * alpha * lasso + (1 - alpha) / 2 * ridge)"
-The penalized log likelihood can be written in the following way:
+<!-- *from the package documentation: I found "lambda * (penalty_factor * alpha * lasso + (1 - alpha) / 2 * ridge)" -->
+The penalized log likelihood can be written in the following way (with $k$ the total number of parameters):
 
 
 $$ pl_c(\gamma, \beta, , S_{u,0}) = log(L_c(\gamma, \beta, S_{u,0})) + \\ \lambda_c\alpha_c\sum_{j=1}^k|\gamma_j| + \frac{\lambda_c}{2}(1-\alpha_c)\sum_{j=1}^k\gamma_j^2 + \\ \lambda_u\alpha_u\sum_{j=1}^k|\beta_j| + \frac{\lambda_u}{2}(1-\alpha_u)\sum_{j=1}^k\beta_j^2$$
+Penalty tuning is done based on the Bayesian Information Criterion (BIC) of the model.
+More concretely, the *cox_cure_net* function is called with many different combinations of the $\alpha$ and $\lambda$ penalties.
+The penalty values that yield the model with the lowest BIC are chosen.
 
 # Results
 
-In this section, we describe our results. In section \@ref(subsec-exploration) we explore the data and select a subset of the data for further exploration.
-
-------------mention something about Concordance Index (see intsurv)?------------
-
+In this section, we describe our results.
+In section \@ref(subsec-exploration) we explore the data and select a subset of the data for further exploration.
+Section \@ref(subsec-curemodel) shows the results from the Cox cure rate model.
 
 ## Data exploration {#subsec-exploration}
 
-We downloaded all files on the PSPLIB and CV instance sets. We only consider exact algorithms since we want to analyse the time it takes to obtain the optimal solution. Heuristic algorithms typically can not ascertain whether the obtained solution is optimal and are therefore excluded. There are 
-
-look at the amount of data that we have for each instance set / algorithm --> only creemers algorithm will work.
-
-## Cure model
-
-Mention that Time=0.00000001 if it is actually 0
-```{r fit-models}
-data_cv_all_1 <- data_cv_all %>%
-  group_by(ID, author) %>%
-  summarize(is_optimal = any(Type == "optimal"),
-            Time = mean(Time)) %>%
-  ungroup() %>%
-  mutate(Time = ifelse(is_optimal,
-                       Time,
-                       ifelse(author == "C",
-                              48*60*60*1000,
-                              ifelse(author == "WZ",
-                                     3600000,
-                                     20*60*60*1000))
-                       ),
-         status = 1*is_optimal) %>%
-  filter(author == "C") %>%
-  left_join(data_cv, by = join_by(ID == IDset)) %>%
-  mutate(Time = ifelse(Time <= 0.00001, 0.00001, Time)) %>%
-  mutate(Time == 172800000, 126755558, Time) #lower the upper limit of the Time
-data_cheat <- data_cv_all_1 %>%
-  mutate(status = ifelse(Time > 5 * 10^5, 0, status),
-         Time = ifelse(Time > 5 * 10^5, 5*10^5, Time))
-covariates <- data_cv %>%
-  dplyr::select(c(6:38, 58:61)) %>%
-  dplyr::select(where(is.numeric)) %>%
-  colnames()
-covariates <- covariates[!str_detect(covariates, "-") &
-                           !(covariates %in% c("RS", "RF", "nbR", "nbhR", "hRU", "hRC", "RC", "LA"))]
-fm <- paste(covariates, collapse = " + ")
-surv_fm <- as.formula(sprintf("~ %s", fm))
-cure_fm <- surv_fm
-fit <- cox_cure_net(surv_fm, cure_fm, data = data_cv_all_1,
-                     time = Time, event = status,
-                     surv_alpha = 0.5, cure_alpha = 0.5)
-#This is the only model that yields SOMETHING for the surv, if surv_alpha>0, all coefficients are always zero:
-fit <- cox_cure_net(~nbAct + CNC, cure_fm, data = data_cv_all_1,
-                     time = (log(Time)+0.01), event = status,
-                     surv_alpha = 0, cure_alpha = 0.8)
-#blacklist: Wall, Wprec-> do seem relevant in the exploratory graphs
-
-#This works though: 
-  fit <- cox_cure_net(~nbAct + CNC + OS+SP+AD+I5+TF+Wprec+(FS31 >0.22) + LE, cure_fm, data = data_cheat,
-                     time = (log(Time)+0.01), event = status,
-                     surv_alpha = 0.1, cure_alpha = 0.8)
-```
-
-The prediction accuracy of the model is assessed using the concordance index that accommodates right-censored cure models [@asano2017assessing].
-
-# Conclusion and future research
-
-## CV dataset
-The Coelho-Vanhoucke (CV) dataset consists of 623 RCPSP instances, first described in @cv2020 that can be downloaded from [here](https://www.projectmanagement.ugent.be/research/data).
-Figure \@ref(fig:cv-cormat) shows the correlation between different parameters (Table \@ref(tab:parameter)) in all 623 instances.
-Figure \@ref(fig: cv-cormat-reorder) shows the same correlation matrix with the rows and column reordered to show highly correlated hierarchical clusters.
-
+All files on the PSPLIB and CV instance sets were downloaded. We only consider exact algorithms since we want to analyse the time it takes to obtain the *optimal* solution.
+Heuristic algorithms typically can not ascertain whether the obtained solution is optimal and are therefore excluded.
 As of September 2023, three different authors have submitted their run-time results and best (or optimal) solution to each of the instances;
+
 - @cv2020 (CV) designed this dataset with difficult to solve instances and provided their heuristic solutions to some of them.
 - @watermeyer2022partition (WZ) was the first one to add further solutions to improve upon the already achieved results.
 - @creemers2021 (C) recently added his results and is able to solve almost all instances.
 
+Figure \@ref(fig:cv-compare-authors) shows the Kaplan-Meier curves for each of them
 
-In this chapter, we compare the run times reported by each of the researchers for each of the instances. If a researcher is unable to find the optimal solution (within a certain time limit), they might still report the best solution that was found.
+<!-- and Table \@ref(tab:cv-compare-authors-quantiles) shows the log-log confidence intervals around the quantiles. -->
 
-
-### Run times: Kaplan Meier
-
-In this chapter, we look at the different run times to find an optimal solution. If an optimal solution is not found, a lower bound and/or heuristic solution was reported instead. If a non-optimal solution is reported, we consider the run time to be right-censored.
-
-Figure \@ref(fig:cv-compare-authors) shows the run times for different authors. It can be seen than @cv2020 solves none of the instances to optimality. They designed this dataset to be difficult such that it can serve as a benchmarking dataset for new RCPSP algorithms. @watermeyer2022partition can solve almost 30% of all instances to optimality. Since they stop their algorithm after 3600 seconds, all other instances are right censored at that time. Lastly, @creemers2021 allows for a maximum run time of 48 hours. If no optimal solution is found after that, the instance is right-censored. 
-
-Table \@ref(tab:cv-compare-authors-quantiles) shows different quantiles for each author with log-log 95% confidence intervals.
-
-```{r cv-compare-authors, fig.cap="Comparing the run time for the different authors.", echo = FALSE, message = FALSE, warning = FALSE}
+```{r cv-compare-authors, fig.cap="Comparing the run time for the different authors.", echo = FALSE, message = FALSE, warning = FALSE, appendix = TRUE}
+#-------------------------KM curves for the CV dataset-------------------------#
 data_cv_all_1 <- data_cv_all %>%
   group_by(ID, author) %>%
   summarize(is_optimal = any(Type == "optimal"),
@@ -382,17 +327,18 @@ data_cv_all_1 <- data_cv_all %>%
                                      3600000,
                                      20*60*60*1000))
                        ),
-         status = 1*is_optimal)
+         status = 1 * is_optimal)
 s1 <- survfit(Surv(Time, status) ~ author, data = data_cv_all_1)
 survfit2(Surv(Time, status) ~ author, data = data_cv_all_1) %>%
   ggsurvfit() +
   labs(
     x = "milliseconds",
-    y = "Proportion of instances not solved to optimality"
+    y = "Proportion not solved optimally"
     )
 ```
 
-```{r cv-compare-authors-quantiles, fig.cap="Comparing the run time for the different authors.", echo = FALSE, message = FALSE, warning = FALSE}
+```{r cv-compare-authors-quantiles, fig.cap="Comparing the run time for the different authors for the CV instance set.", echo = FALSE, message = FALSE, warning = FALSE, eval = FALSE}
+#-----------------------------Calculate quantiles------------------------------#
 library(biostatUZH)
 qKM10 <- quantileKM(data_cv_all_1$Time, data_cv_all_1$status,
                     group = data_cv_all_1$author, quant = 0.1,
@@ -436,12 +382,304 @@ qKM <- data_frame(author = c("CV", "WZ", "C"),
                     mutate(q = sprintf("%.0f, [%.0f, %.0f]", quantile,
                                        lower.ci, upper.ci)) %>% dplyr::pull(q))
 qKM %>%
-  kable(caption = "Quantiles and confidence intervals for the time to solve to optimality.",
-        booktabs = TRUE) %>%
+  kable(
+    caption = "Quantiles and confidence intervals for the time to solve to optimality.",
+    booktabs = TRUE) %>%
   kableExtra::kable_styling() %>%
   kableExtra::column_spec(1, width = "0.4in") %>%
   kableExtra::column_spec(2:6, width = "1in")
 ```
+
+Since the PSPLIB instance sets have been available for longer, much more exact algorithms have been tested on these instance sets.
+Figure \@ref(fig:psplib-km) shows the Kaplan-Meier curves for each of the different PSPLIB instance sets; J30, J60, J90 and J120 which have 30, 60, 90, or 120 activities in each instance respectively.
+
+```{r load-psplib-data, echo = FALSE, message = FALSE, warning = FALSE, eval = file.exists(find_root_file("data", "psplib_survival_data.yml", criterion = has_file("RCPSP_survival.Rproj"))), appendix = TRUE}
+#----------------read the cleaned, merged, psplib dataset.---------------------#
+#---For brevity, the data wrangling to combine several excel files into one,---#
+#-----------------------clean data frame is omitted----------------------------#
+data_psplib_all <- git2rdata::read_vc(file = "psplib_survival_data.yml",
+                   root = find_root_file("data",
+                                         criterion =
+                                           has_file("RCPSP_survival.Rproj")))
+```
+
+```{r psplib-km, echo = FALSE, message = FALSE, warning = FALSE, fig_width = 6.5, fig.height = 6, fig.cap = "Comparing the run time for the different authors for the PSPLIB dataset.", appendix = TRUE}
+#------------------------KM curves for the psplib dataset----------------------#
+data_psplib_all_1 <- data_psplib_all %>%
+  group_by(ID, author) %>%
+  summarize(is_optimal = any(status == 1),
+            Time = mean(Time)) %>%
+  ungroup() %>%
+  mutate(Time = ifelse(is_optimal,
+                       Time,
+                       ifelse(author == "C",
+                              48*60*60*1000,
+                              ifelse(author == "WZ",
+                                     3600000,
+                                     20*60*60*1000))
+                       ),
+         status = 1*is_optimal,
+         ID = as.numeric(ID))
+p30 <- survfit2(Surv(Time, status) ~ author,
+                data = data_psplib_all %>%
+                  dplyr::filter(set == "J30")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion not solved optimally"
+    ) +
+  ggtitle("J30") + 
+  ylim(0,1)
+p60 <- survfit2(Surv(Time, status) ~ author,
+                data = data_psplib_all %>%
+                  dplyr::filter(set == "J60")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion not solved optimally"
+    ) +
+  ggtitle("J60") + 
+  ylim(0, 1) + 
+  xlim(0, 20*60*60*1000) #20 hours
+p90 <- survfit2(Surv(Time, status) ~ author,
+                data = data_psplib_all %>%
+                  dplyr::filter(set == "J90")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion not solved optimally"
+    ) +
+  ggtitle("J90") + 
+  ylim(0,1)
+p120 <- survfit2(Surv(Time, status) ~ author,
+                data = data_psplib_all %>%
+                  dplyr::filter(set == "J120")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion not solved optimally"
+    ) +
+  ggtitle("J120") + 
+  ylim(0,1)
+
+p30 + p60 + p90 + p120
+#ggsave("psplib_KM.pdf", width = 13, height = 10)
+```
+
+It can be seen that many authors, both in the CV and PSPLIB dataset either are not able to solve many instances or do not let their algorithm run for long enough to reach a plateau.
+We will therefore focus on just one of the authors in the remainder of this study. 
+@creemers2021 tested his exact algorithm on both the CV and the J60 instance sets (labelled as 'C' in Figure \@ref(fig:cv-compare-authors) and \@ref(fig:psplib-km)). He is able to solve many but not all instances and runs lets the algorithm run long enough to reach a plateau.
+
+\clearpage
+
+## Cure model {#subsec-curemodel}
+
+```{r fit-model, echo = FALSE, message = FALSE, warning = FALSE, appendix = TRUE}
+#----------------------Make the dataset to fit the model-----------------------#
+data_cv_all_surv <- data_cv_all %>%
+  group_by(ID, author) %>%
+  summarize(is_optimal = any(Type == "optimal"),
+            Time = mean(Time)) %>%
+  ungroup() %>%
+  mutate(Time = ifelse(is_optimal,
+                       Time,
+                       ifelse(author == "C",
+                              48*60*60*1000,
+                              ifelse(author == "WZ",
+                                     3600000,
+                                     20*60*60*1000))
+                       ),
+         status = 1*is_optimal) %>%
+  filter(author == "C") %>%
+  left_join(data_cv, by = join_by(ID == IDset)) %>%
+  mutate(Time = ifelse(Time <= 0.00001, 0.00001, Time)) %>%
+  mutate(Time = ifelse(Time >= 172800000, 126755558, Time), 
+         status = ifelse(Time == 126755558, 0, status))
+data_psplib <- read_excel(
+  path = find_root_file(
+    "data", "RCPLIB (Parameters and BKS).xlsx",
+    criterion = has_file("RCPSP_survival.Rproj")
+  ),
+  sheet = "PSPLIB",
+  skip = 0
+) %>%
+  rename(nbR = `#R`) %>%
+  rename(nbAct = `#Act`) %>%
+  rename(nblR = `#lR`) %>%
+  rename(nbhR = `#hR`)
+colnames(data_psplib)[2] <- "IDset"
+colnames(data_psplib) <- str_replace_all(colnames(data_psplib), " ", "-")
+colnames(data_psplib) <- str_replace_all(colnames(data_psplib), fixed("("), "-")
+colnames(data_psplib) <- str_replace_all(colnames(data_psplib), fixed(")"), "")
+data_psplib_all_surv <- data_psplib_all %>%
+  group_by(ID, author) %>%
+  summarize(is_optimal = any(status == 1),
+            Time = mean(Time)) %>%
+  ungroup() %>%
+  mutate(Time = ifelse(is_optimal,
+                       Time,
+                       ifelse(author == "C",
+                              48*60*60*1000,
+                              ifelse(author == "WZ",
+                                     3600000,
+                                     20*60*60*1000))
+                       ),
+         status = 1 * is_optimal) %>%
+  filter(author == "C") %>%
+  mutate(ID = as.numeric(ID)) %>%
+  left_join(data_psplib %>% filter(SubSet == "J60"),
+            by = join_by(ID == IDset)) %>%
+  mutate(Time = ifelse(Time <= 0.00001, 0.00001, Time)) %>%
+  mutate(Time = ifelse(Time >= 172800000, 126755558, Time),
+         status = ifelse(Time == 126755558, 0, status),
+         LE = as.numeric(LE),
+         FE = as.numeric(FE))
+data_surv <- rbind(data_cv_all_surv, data_psplib_all_surv)
+data <- data_surv
+colnames(data) <- str_replace_all(colnames(data), "-", "_")
+
+#---------------Set parametes for the elastic net cure model-------------------#
+surv_alpha <- seq(0, 1, 0.1)
+cure_alpha <- seq(0, 1, 0.1)
+covariates <- data_cv %>%
+  dplyr::select(c(6:38, 58:61)) %>%
+  dplyr::select(where(is.numeric)) %>%
+  colnames()
+covariates <- str_replace_all(covariates, "-", "_")
+colnames(data) <- str_replace_all(colnames(data), "-", "_")
+fm <- paste(covariates, collapse = " + ")
+surv_model <- as.formula(sprintf("~ %s", fm))
+cure_model <- as.formula(sprintf("~ %s", fm))
+#-----------------these alpha values yielded the lowest BIC--------------------#
+fit_net <- cox_cure_net(surv_model, cure_model,
+                        data = data %>% filter(!is.na(LE)),
+                        time = Time, event = status,
+                        surv_alpha = 1, cure_alpha = 0.6)
+#------------------------------Fit the final model-----------------------------#
+set.seed(2023)
+mod <- cox_cure(
+  ~ nbAct + AD + FS21 + FS32 + Wall + LE + lRF + lRU + lRS + SP + LA,
+  ~ nbAct + FS31 + Wall + LE + RU + CNC + I5 + Wprec + Exact__E_to_H, 
+                 data = data %>% filter(!is.na(LE)),
+                 time = Time, event = status, bootstrap = 50)
+s <- summary(mod)
+```
+```{r eval=FALSE, echo = FALSE, message = FALSE, warning = FALSE, appendix = TRUE}
+#A function to test different elastic net parameters in parallel for parameter tuning.
+library(furrr)
+test_models <- function(surv_alpha, cure_alpha, surv_model, cure_model, data){
+  comb <- expand.grid(surv_alpha, cure_alpha)
+  surv_alpha <- comb$Var1
+  cure_alpha <- comb$Var2
+  test <- furrr::future_map2(
+    surv_alpha,
+    cure_alpha,
+    function(x, y){
+      mod <- cox_cure_net(surv_model, cure_model, data = data,
+                          time = Time, event = status,
+                          surv_alpha = x, cure_alpha = y)
+      output <- data_frame(surv_alpha = x,
+                           cure_alpha = y,
+                           surv = sum(coef(mod)$surv),
+                           cure = sum(coef(mod)$cure),
+                           BIC = min(BIC(mod)$BIC))
+      return(output)
+      })
+  return(test %>% list_rbind())
+}
+data <- data_surv %>% filter(!(is.na(LE) | is.na(FE)))
+surv_alpha <- seq(0, 1, 0.1)
+cure_alpha <- seq(0, 1, 0.1)
+covariates <- data_cv %>%
+  dplyr::select(c(6:38, 58:61)) %>%
+  dplyr::select(where(is.numeric)) %>%
+  colnames()
+covariates <- str_replace_all(covariates, "-", "_")
+colnames(data) <- str_replace_all(colnames(data), "-", "_")
+fm <- paste(covariates, collapse = " + ")
+surv_model <- as.formula(sprintf("~ %s", fm))
+cure_model <- as.formula(sprintf("~ %s", fm))
+test2 <- test_model(surv_alpha, cure_alpha, surv_model, cure_model, data)
+#Check which elastic net parameters yield the lowest BIC, and look at the value
+#of the coefficients vor the survival and the cure part.
+bic <- test2 %>%
+  pivot_longer(cols = 3:5,
+               names_to = "param",
+               values_to = "value") %>%
+  filter(param == "BIC") %>%
+  ggplot(aes(x = as.factor(surv_alpha), y = as.factor(cure_alpha))) +
+  geom_raster(aes(fill = value))+
+  geom_text(aes(label = round(value)))# +
+
+surv_coef <- test2 %>%
+  pivot_longer(cols = 3:5,
+               names_to = "param",
+               values_to = "value") %>%
+  filter(param == "surv") %>%
+  ggplot(aes(x = as.factor(surv_alpha), y = as.factor(cure_alpha))) +
+  geom_raster(aes(fill = value))+
+  geom_text(aes(label = round(value, 2)))#+
+
+cure_coef <- test2 %>%
+  pivot_longer(cols = 3:5,
+               names_to = "param",
+               values_to = "value") %>%
+  filter(param == "cure") %>%
+  ggplot(aes(x = as.factor(surv_alpha), y = as.factor(cure_alpha))) +
+  geom_raster(aes(fill = value))+
+  geom_text(aes(label = round(value, 2)))
+```
+
+As specified in section \@ref(methodology), we will fit a semi-parametric mixture cure model where we use logistic model for the incidence part and a Cox model for the latency part.
+An elastic net  is used for variable selection since there are many complexity parameters, of which many are correlated.
+While the CV and J60 have `r nrow(data_cv_all_surv)` and `r nrow(data_psplib_all_surv)` instances respectively, we only use `r nrow(data_surv %>% filter(!is.na(LE)))` in our model since the parameter "LE" is missing for some J60 instances.
+The confidence intervals around the parameter estimates are obtained using 50 bootstrap samples.
+
+The final model is shown in Table \@ref(tab:model).
+
+```{r model, echo = FALSE, message = FALSE, warning = FALSE, appendix = TRUE}
+#-----------------------show the final cure model------------------------------#
+latency <- s$surv_coef_mat %>%
+  as.data.frame() %>%
+  mutate(stars = gtools::stars.pval(`Pr(>|z|)`))
+incidence <- s$cure_coef_mat %>%
+  as.data.frame() %>%
+  mutate(stars = gtools::stars.pval(`Pr(>|z|)`),
+         `exp(coef)` = ifelse(`exp(coef)` > 1000, NA, `exp(coef)`))
+options(knitr.kable.NA = '9.4e+56')
+latency %>%
+  rbind(incidence) %>%
+  kable(booktabs = TRUE,
+        caption = "Mixture cure model for the time to solve an instance to optimality.",
+        digits = 3,
+        col.names = c("coef", "exp(coef)", "se", "z", "p-value", "")) %>%
+  kableExtra::group_rows(group_label = "latency",
+                         start_row = 1,
+                         end_row = nrow(latency)) %>%
+  kableExtra::group_rows(group_label = "incidence",
+                         start_row = 1 + nrow(latency),
+                         end_row = nrow(latency) + nrow(incidence))
+```
+
+We see that, for instance, an instance with more activities (higher nbAct), will take longer to solve since it has a significantly negative coefficient in the Cox model and, thus, lower hazard. The incidence model shows that an instance with more activities is less likely to be solved to optimality since it has a negative coefficient in the logistic cure model.
+
+The prediction accuracy of the model is assessed using the concordance index that accommodates right-censored cure models and that is weighted by the 'cure status' (i.e., cured, uncured, or censored cases) [@asano2017assessing].
+For our model, the weighted concordance index is `r 100*round(s$model$c_index,4)`% which is considered a good fit.
+
+# Conclusion and future research
+
+In this report, we uncovered which complexity parameters can predict whether or not an RCPSP instance in solvable to optimality and, if it is, how long it will take.
+The Cox cure model of Table \@ref(tab:model) fits the data well with a concordance index of `r 100*round(s$model$c_index,4)`%.
+The Elastic Net approach successfully allows us to work with multicollinearity and aids in variable selection.
+This report makes a valuable contribution to the field since it delivers a rigorous methodology to check whether newly developed complexity parameters make a valuable contribution on top the myriad of existing parameters.
+
+In this study, only one RCPSP algorithm was considered since only @creemers2021 allowed his algorithm to run long enough to be able to reliably estimate the cure fraction.
+When more authors upload results for their algorithms to the [RCPSP website](http://solutionsupdate.ugent.be/rcpsp) and they allow their algorithms to run long enough, future research should investigate whether the parameter importance differs for different RCPSP algorithms.
+Frailty models could be used to cope with the different RCPSP algorithms (authors) in one model.
+Frailty models will allow to investigate whether some RCPSP algorithms may be able to cope better with certain instance characteristics than others.
+
+Another extension to this research would be to try to fit a fully parametric Accelerated Failure Time (AFT) model to the latency part.
+The current Cox model assumes proportional hazards which is not always a realistic assumption as shows in appendix \@ref(phassumption). AFT models allow for more freedom since they do not assume proportional hazards.
 
 # Bibliography
 
@@ -451,11 +689,10 @@ qKM %>%
 
 # Correlation between covariates {#app-1}
 
-The following two figures show the correlation between the complexity parameters in the CV dataset. Figure \@ref(fig:cv-cormat-reorder) clearly shows that there are groups of covariates that are highly correlated. The correlation between RC and hRC, for example is `r round(M["RC", "hRC"],2)` while the correlation between RC and FS22 is `r round(M["RC", "FS22"],2)`.
+The following figure shows the correlation between the complexity parameters in the CV and the PSPLIB dataset. Figure \@ref(fig:cv-cormat-reorder) and \@ref(fig:psplib-cormat-reorder) clearly shows that there are groups of covariates that are highly correlated. The correlation between RC and hRC, for example is `r round(M["RC", "hRC"],2)` while the correlation between RC and FS22 is `r round(M["RC", "FS22"],2)`.
 
-```{r cv-cormat, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest.", fig.width = 9, fig.height = 6}
-
-#corrplot(M)
+```{r cv-cormat-reorder, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest (hierarchical clustering reordering) in the CV dataset.", fig.width = 10, fig.height = 8, appendix = TRUE}
+#-----------------------correlation matrix for the CV dataset------------------#
 order.AOE <- corrMatOrder(M, order = 'AOE')
 order.FPC <- corrMatOrder(M, order = 'FPC')
 order.hc <- corrMatOrder(M, order = 'hclust')
@@ -465,32 +702,57 @@ M.AOE <- M[order.AOE, order.AOE]
 M.FPC <- M[order.FPC, order.FPC]
 M.hc  <- M[order.hc, order.hc]
 M.hc2 <- M[order.hc2, order.hc2]
-corrplot(M)
+#corrplot(M)
 #corrplot(M.AOE)
 #corrplot(M.FPC)
 #corrplot(M.hc)
-```
-
-```{r cv-cormat-reorder, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest (hierarchical clustering reordering).", fig.width = 9, fig.height = 6}
 corrplot(M.hc)
 corrRect.hclust(M.hc2, k = 6)
 ```
 
-# Checking the proportional hazard assumption
 
-Since we are using a Cox model, it is important to know whether the Cox proportional hazard assumption holds.
-In this chapter, we explore the different parameters and how they influence the survival time.
+```{r psplib-cormat-reorder, echo = FALSE, message = FALSE, warning = FALSE, fig.cap = "Correlation between the different numeric parameters of interest (hierarchical clustering reordering) in the PSPLIB dataset.", fig.width = 10, fig.height = 8, appendix = TRUE}
+#------------------correlation plot for the PSPLIB dataset---------------------#
+M <- data_psplib %>%
+  filter(!(is.na(LE)|is.na(FE))) %>%
+  dplyr::select(
+    parameters %>%
+      dplyr::filter(Category %in%
+                      c("Network Topology",
+                        "Complexity indictors",
+                        "Resource parameters",
+                        "Hardness classification")) %>%
+      pull(Parameter) &
+                      where(is.numeric)) %>%
+  cor()
+order.AOE <- corrMatOrder(M, order = 'AOE')
+order.FPC <- corrMatOrder(M, order = 'FPC')
+order.hc <- corrMatOrder(M, order = 'hclust')
+order.hc2 <- corrMatOrder(M, order = 'hclust', hclust.method = 'ward.D')
+
+M.AOE <- M[order.AOE, order.AOE]
+M.FPC <- M[order.FPC, order.FPC]
+M.hc  <- M[order.hc, order.hc]
+M.hc2 <- M[order.hc2, order.hc2]
+#corrplot(M)
+#corrplot(M.AOE)
+#corrplot(M.FPC)
+#corrplot(M.hc)
+corrplot(M.hc)
+corrRect.hclust(M.hc2, k = 6)
+```
+  
+# Exploring all complexity parameters' effects {#phassumption}
+
+In this appendix, we explore the different parameters and how they influence the survival time.
 Since all parameters are continuous variables, we split the instance set into three or four equally-sized groups where the parameter varies from low to high.
 The Kaplan Meier curves will allow us to look for patterns that might uncover important covariates to predict runtimes.
-Additionally, the figures allow us to visually check the PH assumption.
+If possible, we show Schoenfeld residuals to test the proportional hazard (PH) assumption.
+If the PH assumption holds, we should see a horizontal line on these graphs. 
+We also formally test the PH assumption [@grambsch1994].
 
-!!!??? also formally test PH assumption ???!!!
-http://www.sthda.com/english/wiki/cox-model-assumptions#:~:text=The%20proportional%20hazards%20(PH)%20assumption,violation%20of%20the%20PH%20assumption.
-
-
-
-```{r display-parameter-analysis, results = "asis", echo = FALSE, eval = TRUE}
-#c("CNC", "AD", "TF", "Wprec", "RF", "RU", "RS", "RC")
+```{r display-parameter-analysis, results = "asis", echo = FALSE, eval = TRUE, appendix = TRUE}
+#-------------appendix to explore all complexity parameters' effects-----------#
 to_do <- data_cv %>%
   dplyr::select(c(6:38, 58:61)) %>%
   dplyr::select(where(is.numeric)) %>%
@@ -503,4 +765,83 @@ rmd <- sapply(
 ) %>%
   paste(collapse = "\n\n")
 cat(knit(text = rmd, quiet = TRUE))
+```
+
+```{r display-parameter-analysis-content, echo = FALSE, eval = FALSE, appendix = TRUE}
+#--This last chunk of code is used iteratively to generate a small exploratory-#
+#----------analysis for each of the parameters. It is the content of-----------#
+#---------------------------_cv_analysis_parameter.Rmd-------------------------#
+if (interactive()) {
+  this_par <- sample(unique(colnames(data_cv)[6:39]), 1)
+} else {
+  this_par <- "{{id}}"
+}
+
+data_cv_all_2 <- data_cv %>%
+  mutate(binned = chop_equally(x = data_cv %>% dplyr::pull(this_par),
+                               groups = 4),
+         continuous = data_cv %>% dplyr::pull(this_par)) %>%
+  dplyr::select(IDset, binned, continuous) %>%
+  right_join(data_cv_all_1 %>% filter(author == "C"),
+             by = join_by(IDset == ID))
+
+data_psplib_all_2 <- data_psplib[data_psplib[,this_par] != "n.f.", ] %>%
+  mutate(
+    binned = chop_equally(
+      x = data_psplib[data_psplib[,this_par] != "n.f.", ] %>%
+        dplyr::pull(this_par), groups = 4),
+    continuous = data_psplib[data_psplib[,this_par] != "n.f.", ] %>%
+      dplyr::pull(this_par)) %>%
+  dplyr::select(IDset, binned, continuous) %>%
+  right_join(data_psplib_all_1 %>% filter(author == "C"),
+             by = join_by(IDset == ID)) %>%
+  filter(!is.na(binned)) 
+nb_groups <- length(unique(data_cv_all_2$binned))
+p1 <- survfit2(Surv(Time, status) ~ binned,
+         data = data_psplib_all_2 %>% filter(author == "C")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion not solved optimally"
+    ) + 
+  ylim(0, 1) +
+  #xlim(0, max(data_cv_all_1$Time))
+  scale_color_manual(name = this_par,
+                     values = colorRampPalette(colors = c("#99CCFF", "#003366"))(4))
+p2 <- survfit2(Surv(Time, status) ~ binned,
+         data = data_cv_all_2 %>% filter(author == "C")) %>%
+  ggsurvfit() +
+  labs(
+    x = "milliseconds",
+    y = "Proportion not solved optimally"
+    ) + 
+  ylim(0, 1) +
+  #xlim(0, max(data_cv_all_1$Time))
+  scale_color_manual(name = this_par,
+                     values = colorRampPalette(colors = c("#99CCFF", "#003366"))(4))
+
+combined <- p1 + p2 & theme(legend.position = "bottom")
+combined + plot_layout(guides = "collect")
+
+data_both <- rbind(data_cv_all_2 %>% filter(author == "C"),
+                   data_psplib_all_2 %>% filter(author == "C"))
+
+library("survival")
+if(this_par != "LE") {
+res.cox.bin <- coxph(Surv(Time, status) ~ binned,
+                 data =  data_both)
+test.ph.bin <- cox.zph(res.cox.bin)
+res.cox.cntn <- coxph(Surv(Time, status) ~ continuous,
+                 data = data_both)
+test.ph.cntn <- cox.zph(res.cox.cntn)
+}
+par(mfrow = c(1,2))
+plot(test.ph.bin)
+plot(test.ph.cntn)
+```
+
+
+# All code for this report
+
+```{r ref.label=knitr::all_labels(appendix == TRUE), echo=TRUE, eval=FALSE}
 ```

@@ -1,0 +1,1 @@
+Due to convergence problems, the PH assumptions could not be checked for this covariate.

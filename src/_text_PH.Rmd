@@ -1,0 +1,4 @@
+
+To check the proportional hazard assumption, Schoenfeld residuals are shown in the figure below for both the binned and continuous version of the variable (both PSPLIB and CV instance sets combined).
+A formal proportional hazard test that checks whether $H_0=$*the PH assumption holds* has a p-value of `r round(test.ph.bin$table[1,"p"],3)` and `r round(test.ph.cntn$table[1,"p"],3)` for the binned and continuous version of the variable respectively. `r ifelse(test.ph.bin$table[1,"p"]<0.05 & test.ph.cntn$table[1,"p"]<0.05, "We reject the null hypothesis that the PH assumption holds.", ifelse(test.ph.bin$table[1,"p"]>=0.05 & test.ph.cntn$table[1,"p"]>=0.05, "We accept the null hypothesis and assume PH.","We could carefully accept the null hypothesis."))`
+
